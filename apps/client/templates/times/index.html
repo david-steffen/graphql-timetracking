@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% load static %}
+{% block head %}
+  <script src="{% static 'build/main.min.js' %}" ></script>
+{% endblock %}
+
+{% block content %}
+  <div id="main"></div>
+  <script>
+    var app = Elm.Main.init({
+      node: document.getElementById('main'),
+      flags: { csrftoken: document.cookie.replace('csrftoken=', '') }
+    });
+  </script>
+{% endblock %}
