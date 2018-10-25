@@ -34,9 +34,12 @@ import Types.Timelog exposing
   , ProjectRefQuery
   , TimelogsRequest
   , TimelogsWithProjectsRequest
-  , TimelogMutation
-  , TimelogInput
+  , CreateTimelogMutation
+  , UpdateTimelogMutation
   , CreateTimelogInput
+  , UpdateTimelogInput
+  , CreateTimelogForm
+  , UpdateTimelogForm
   )
 
 
@@ -119,8 +122,8 @@ timelogQuery =
       |> request
         { id = "1" }
 
-convertToTimelogMutation : CreateTimelogInput -> TimelogMutation
-convertToTimelogMutation timelog =
+convertToCreateTimelogMutation : CreateTimelogForm -> CreateTimelogMutation
+convertToCreateTimelogMutation timelog =
   let
     dateString =
       case timelog.date of
@@ -135,19 +138,39 @@ convertToTimelogMutation timelog =
         Nothing ->
           ""
   in
-    TimelogMutation timelog.description durationString dateString timelog.project
+    CreateTimelogMutation timelog.description durationString dateString timelog.project
 
-
-processCreateTimelogInput : CreateTimelogInput -> TimelogInput
-processCreateTimelogInput timeLog =
+convertToUpdateTimelogMutation : Timelog -> UpdateTimelogMutation
+convertToUpdateTimelogMutation timelog =
   let
-    newTimeLog = convertToTimelogMutation timeLog
+    id = 
+      Uuid.toString timelog.id
+    dateString =
+      Date.toIsoString timelog.date
+    durationString =
+      TimeDelta.toString timelog.duration
+  in
+    UpdateTimelogMutation id timelog.description durationString dateString (Uuid.toString timelog.project.id)
+
+
+processCreateTimelogInput : CreateTimelogForm -> CreateTimelogInput
+processCreateTimelogInput timelog =
+  let
+    newTimeLog = convertToCreateTimelogMutation timelog
   in
     { input = newTimeLog
     }
 
-timelogMutation : TimelogInput -> Request Mutation Timelog
-timelogMutation timelog =
+processUpdateTimelogInput : UpdateTimelogForm -> UpdateTimelogInput
+processUpdateTimelogInput timelog =
+  let
+    newTimeLog = convertToUpdateTimelogMutation timelog
+  in
+    { input = newTimeLog
+    }
+
+createTimelogMutation : CreateTimelogInput -> Request Mutation Timelog
+createTimelogMutation timelog =
   let
     taskVar =
         Var.required "input"
@@ -172,6 +195,40 @@ timelogMutation timelog =
       |> request
         { input =
           { description = timelog.input.description
+          , project = timelog.input.project
+          , date = timelog.input.date
+          , duration = timelog.input.duration
+          }
+        }
+
+updateTimelogMutation : UpdateTimelogInput -> Request Mutation Timelog
+updateTimelogMutation timelog =
+  let
+    taskVar =
+        Var.required "input"
+        .input
+        (Var.object "TaskInput"
+            [ Var.field "id" .description Var.string
+            , Var.field "description" .description Var.string
+            , Var.field "duration" .duration Var.string
+            , Var.field "date" .date Var.string
+            , Var.field "project" .project Var.string
+            ]
+        )
+
+    mutationRoot =
+      extract
+        (field "updateTask"
+          [ ("input", Arg.variable taskVar) ]
+          (extract (field "task" [] timelogObject))
+        )
+
+  in
+    mutationDocument mutationRoot
+      |> request
+        { input =
+          { id = timelog.input.id
+          , description = timelog.input.description
           , project = timelog.input.project
           , date = timelog.input.date
           , duration = timelog.input.duration

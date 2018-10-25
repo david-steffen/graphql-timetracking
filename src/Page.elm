@@ -7,7 +7,6 @@ import Json.Decode as JD
 import Uuid exposing (Uuid)
 import Types exposing (Model)
 
-
 type alias SelectOption =
   { value : String
   , title : String

@@ -9,6 +9,10 @@ import Types.Timelog exposing
   , TimelogModel
   , TimelogsWithProjectsRequest
   , CreateTimelogInput
+  , UpdateTimelogInput
+  , CreateTimelogForm
+  , UpdateTimelogForm
+  , TimelogFormAction(..)
   )
 import Types.Project exposing (Project)
 import Utils.TimeDelta exposing (..)
@@ -21,7 +25,9 @@ import GraphQL.Client.Http as GraphQLClient
 import Api exposing (sendQueryRequest, sendMutationRequest)
 import Api.Timelog exposing 
   ( processCreateTimelogInput
-  , timelogMutation
+  , processUpdateTimelogInput
+  , createTimelogMutation
+  , updateTimelogMutation
   , timelogsQuery
   , mergeWithProjects
   )
@@ -36,18 +42,27 @@ init =
   { readyTimes = False
   , timelogs = []
   , errResult = Nothing
-  , formTimelog = Nothing
+  , createForm = Nothing
+  , updateForm = Nothing
+  , formAction = Create
   , isPendingTimelog = False
   }
 
 
 type Msg
   = CreateTimelog
-  | ReceiveTimelogMutationResponse (Result GraphQLClient.Error Timelog)
-  | InputTaskDescription String
-  | InputTaskDate String
-  | InputTaskDuration String
-  | InputTaskProject String
+  | ReceiveCreateTimelogMutationResponse (Result GraphQLClient.Error Timelog)
+  | ReceiveUpdateTimelogMutationResponse (Result GraphQLClient.Error Timelog)
+  | InputCreateTimelogDescription String
+  | InputCreateTimelogDate String
+  | InputCreateTimelogDuration String
+  | InputCreateTimelogProject String
+  | EditTimelog String
+  | InputUpdateTimelogDescription String
+  | InputUpdateTimelogDate String
+  | InputUpdateTimelogDuration String
+  | InputUpdateTimelogProject String
+  | DeleteTimelog String
 
 --
 
@@ -62,9 +77,9 @@ update msg ({timelogModel, projectModel} as model) =
           }  
       in
         ( passToModel newTimelogModel model
-        , sendTimelogMutation model
+        , sendCreateTimelogMutation model
         )
-    ReceiveTimelogMutationResponse (Err err) ->
+    ReceiveCreateTimelogMutationResponse (Err err) ->
       let
         newTimelogModel = 
           { timelogModel 
@@ -74,94 +89,195 @@ update msg ({timelogModel, projectModel} as model) =
         ( passToModel newTimelogModel model
         , Cmd.none
         )
-    ReceiveTimelogMutationResponse (Ok response) ->
+    ReceiveCreateTimelogMutationResponse (Ok response) ->
       let
         reversed = List.reverse timelogModel.timelogs
         timelogs = response :: reversed
         newTimelogModel = 
           { timelogModel 
           | timelogs = List.reverse timelogs 
-          , formTimelog = Nothing
+          , createForm = Nothing
           , isPendingTimelog = False
           }
       in
         ( passToModel newTimelogModel model
         , Cmd.none
         )
-    InputTaskDescription string ->
+    ReceiveUpdateTimelogMutationResponse (Err err) ->
       let
-        timelog = createTimelogForm timelogModel.formTimelog
+        newTimelogModel = 
+          { timelogModel 
+          | isPendingTimelog = False
+          }  
+      in
+        ( passToModel newTimelogModel model
+        , Cmd.none
+        )
+    ReceiveUpdateTimelogMutationResponse (Ok response) ->
+      let
+        reversed = List.reverse timelogModel.timelogs
+        timelogs = response :: reversed
+        newTimelogModel = 
+          { timelogModel 
+          | timelogs = List.reverse timelogs 
+          , createForm = Nothing
+          , isPendingTimelog = False
+          }
+      in
+        ( passToModel newTimelogModel model
+        , Cmd.none
+        )
+    InputCreateTimelogDescription string ->
+      let
+        timelog = hasCreateTimelogForm timelogModel.createForm
         newTimelog =
           { timelog
               | description = string
           }
       in
         ( passToModel 
-          { timelogModel | formTimelog = Just newTimelog }
+          { timelogModel | createForm = Just newTimelog }
           model
         , Cmd.none
         )
-    InputTaskDate string ->
+    InputCreateTimelogDate string ->
       let
-        timelog = createTimelogForm timelogModel.formTimelog
+        timelog = hasCreateTimelogForm timelogModel.createForm
         newTimelog =
           { timelog
               | date = Date.fromIsoString string |> Result.toMaybe
           }
       in
         ( passToModel 
-          { timelogModel | formTimelog = Just newTimelog }
+          { timelogModel | createForm = Just newTimelog }
           model
         , Cmd.none
         )
-    InputTaskDuration string ->
+    InputCreateTimelogDuration string ->
       let
-        timelog = createTimelogForm timelogModel.formTimelog
+        timelog = hasCreateTimelogForm timelogModel.createForm
         newTimelog =
             { timelog
                 | duration = TimeDelta.fromString string |> Result.toMaybe
             }
       in
         ( passToModel 
-          { timelogModel | formTimelog = Just newTimelog }
+          { timelogModel | createForm = Just newTimelog }
           model
         , Cmd.none
         )
-    InputTaskProject string ->
+    InputCreateTimelogProject string ->
       let
-        timelog = createTimelogForm timelogModel.formTimelog
+        timelog = hasCreateTimelogForm timelogModel.createForm
         newTimelog =
           { timelog
           | project = string
           }
       in
         ( passToModel 
-          { timelogModel | formTimelog = Just newTimelog }
+          { timelogModel | createForm = Just newTimelog }
           model
         , Cmd.none
         )
+    EditTimelog id ->
+      ( model, Cmd.none )
+    InputUpdateTimelogDescription string ->
+      case timelogModel.updateForm of 
+        Just updateForm ->
+          let
+            newTimelog =
+              { updateForm
+                | description = string
+              }
+          in
+            ( passToModel 
+              { timelogModel | updateForm = Just newTimelog }
+              model
+            , Cmd.none
+            )
+        Nothing ->
+          ( model, Cmd.none )
+    InputUpdateTimelogDate string ->
+      case timelogModel.updateForm of 
+        Just updateForm ->
+          let
+            newTimelog =
+              { updateForm
+                | date = Date.fromIsoString string |> Result.toMaybe
+              }
+          in
+            ( passToModel 
+              { timelogModel | updateForm = Just newTimelog }
+              model
+            , Cmd.none
+            )
+        Nothing ->
+          ( model, Cmd.none )
+    InputUpdateTimelogDuration string ->
+      case timelogModel.updateForm of 
+        Just updateForm ->
+          let
+            newTimelog =
+              { updateForm
+                | duration = TimeDelta.fromString string |> Result.toMaybe
+              }
+          in
+            ( passToModel 
+              { timelogModel | updateForm = Just newTimelog }
+              model
+            , Cmd.none
+            )
+        Nothing ->
+          ( model, Cmd.none )
+    InputUpdateTimelogProject string ->
+      case timelogModel.updateForm of 
+        Just updateForm ->
+          let
+            newTimelog =
+              { updateForm
+                | project = string
+              }
+          in
+            ( passToModel 
+              { timelogModel | updateForm = Just newTimelog }
+              model
+            , Cmd.none
+            )
+        Nothing ->
+          ( model, Cmd.none )
+    DeleteTimelog id ->
+      ( model, Cmd.none )
+    
 
-createTimelogForm : Maybe CreateTimelogInput -> CreateTimelogInput
-createTimelogForm timelog =
+hasCreateTimelogForm : Maybe CreateTimelogForm -> CreateTimelogForm
+hasCreateTimelogForm timelog =
   case timelog of 
     Just value ->
       value
     Nothing ->
-      CreateTimelogInput "" Nothing Nothing ""
+      CreateTimelogForm "" Nothing Nothing ""
 
 passToModel : TimelogModel -> Model -> Model
 passToModel timelogModel model =
   { model | timelogModel = timelogModel }
 
-sendTimelogMutation : Model -> Cmd Msg
-sendTimelogMutation  ({timelogModel} as model) =
-  case timelogModel.formTimelog of 
-    Just formTimelog ->
-      sendMutationRequest model.csrf (timelogMutation <| processCreateTimelogInput formTimelog)
-        |> Task.attempt ReceiveTimelogMutationResponse
+sendCreateTimelogMutation : Model -> Cmd Msg
+sendCreateTimelogMutation  ({timelogModel} as model) =
+  case timelogModel.createForm of 
+    Just createForm ->
+      sendMutationRequest model.csrf (createTimelogMutation <| processCreateTimelogInput createForm)
+        |> Task.attempt ReceiveCreateTimelogMutationResponse
     Nothing ->
       Cmd.none
-  
+
+sendUpdateTimelogMutation : Model -> Cmd Msg
+sendUpdateTimelogMutation  ({timelogModel} as model) =
+  case timelogModel.updateForm of 
+    Just updateForm ->
+      sendMutationRequest model.csrf (updateTimelogMutation <| processUpdateTimelogInput updateForm)
+        |> Task.attempt ReceiveUpdateTimelogMutationResponse
+    Nothing ->
+      Cmd.none
     
 view : Model -> Html Msg
 view model =
@@ -190,12 +306,13 @@ createDateTuple : Date -> (Int, Int, Int)
 createDateTuple date =
   (Date.year date, Date.monthNumber date, Date.day date)
 
-dateFilter timeLogs key =
+dateFilter : List Timelog -> (Int, Int, Int) -> List Timelog
+dateFilter timelogs key =
   List.filter
       (\x ->
           startOfWeek x.date == key
       )
-      timeLogs
+      timelogs
 
 groupByWeek : List Timelog -> List ((Int, Int, Int), List Timelog)
 groupByWeek timeLogs =
@@ -276,10 +393,27 @@ timeLogView timelog =
       [ A.class "is-size-7" ]
       [ H.text timelog.description
       ]
+    , actions timelog.id
     ]
 
-timeLogForm : Model -> Html Msg
-timeLogForm ( {timelogModel, projectModel} as model) =
+actions : Uuid -> Html Msg
+actions id =
+  H.div
+    []
+    [ H.span
+      [ A.class "fas fa-pen"
+      , E.onClick <| EditTimelog id
+      ]
+      []
+    , H.span
+      [ A.class "far fa-times-circle"
+      , E.onClick <| DeleteTimelog id
+      ]
+      [] 
+    ]
+
+createTimelogForm : Model -> Html Msg
+createTimelogForm ( {timelogModel, projectModel} as model) =
   let
     button = 
       case timelogModel.isPendingTimelog of
@@ -298,16 +432,59 @@ timeLogForm ( {timelogModel, projectModel} as model) =
   in
     H.div 
       [ A.class "column is-half" ]
-      [ formInput "text" "Description" InputTaskDescription Nothing
-      , formInput "date" "Date" InputTaskDate Nothing
-      , formSelect (List.map (\project -> {value = Uuid.toString project.id, title = project.name}) projectModel.projects) InputTaskProject Nothing
-      , formInput "time" "Duration" InputTaskDuration Nothing
+      [ formInput "text" "Description" InputCreateTimelogDescription Nothing
+      , formInput "date" "Date" InputCreateTimelogDate Nothing
+      , formSelect (List.map (\project -> {value = Uuid.toString project.id, title = project.name}) projectModel.projects) InputCreateTimelogProject Nothing
+      , formInput "time" "Duration" InputCreateTimelogDuration Nothing
       , H.div [ A.class "field" ]
         [ H.div [ A.class "control" ]
           [ button
           ]
         ]
       ]
+
+updateTimelogForm : UpdateTimelogForm -> List Project -> Bool -> Html Msg
+updateTimelogForm timelog projects isPending =
+  let
+    button = 
+      case isPending of
+        True ->
+          H.button
+            [ A.class "button is-primary is-loading"
+            , A.attribute "disabled" "disabled"
+            ]
+            [ H.text "Submit" ]
+        False ->
+          H.button
+            [ A.class "button is-primary"
+            , E.onClick <| EditTimelog timelog.id
+            ]
+            [ H.text "Submit" ]
+  in
+    H.div 
+      [ A.class "column is-half" ]
+      [ formInput "text" "Description" InputUpdateTimelogDescription (Just timelog.description )
+      , formInput "date" "Date" InputUpdateTimelogDate (Just (Date.toIsoString timelog.date))
+      , formSelect (List.map (\project -> {value = Uuid.toString project.id, title = project.name}) projects) InputCreateTimelogProject ( Just timelog.project)
+      , formInput "time" "Duration" InputUpdateTimelogDuration (Just (TimeDelta.toString timelog.duration))
+      , H.div [ A.class "field" ]
+        [ H.div [ A.class "control" ]
+          [ button
+          ]
+        ]
+      ]
+
+timelogForm : Model -> Html Msg
+timelogForm ( {timelogModel, projectModel} as model) = 
+  case timelogModel.formAction of 
+    Create ->
+      createTimelogForm model
+    Update ->
+      case timelogModel.updateForm of
+        Just form ->
+          updateTimelogForm form projectModel.projects timelogModel.isPendingTimelog
+        Nothing ->
+          createTimelogForm model
 
 timeLogSide : Model -> Html Msg
 timeLogSide model =
@@ -316,7 +493,7 @@ timeLogSide model =
     [ H.div 
       [ A.class "column" ]
       []
-    , timeLogForm model
+    , timelogForm model
     , H.div 
       [ A.class "column" ]
       []

@@ -5,9 +5,13 @@ module Types.Timelog exposing
   , ProjectRefQuery
   , TimelogsRequest
   , TimelogsWithProjectsRequest
-  , TimelogMutation
-  , TimelogInput
+  , CreateTimelogMutation
+  , UpdateTimelogMutation
+  , CreateTimelogForm
+  , UpdateTimelogForm
   , CreateTimelogInput
+  , UpdateTimelogInput
+  , TimelogFormAction(..)
   )
 
 import Uuid exposing (Uuid)
@@ -18,7 +22,9 @@ import Utils.TimeDelta exposing (TimeDelta)
 type alias TimelogModel =
   { readyTimes : Bool
   , timelogs : List Timelog
-  , formTimelog : Maybe CreateTimelogInput
+  , createForm : Maybe CreateTimelogForm
+  , updateForm : Maybe UpdateTimelogForm
+  , formAction : TimelogFormAction
   , errResult : Maybe String
   , isPendingTimelog : Bool
   }
@@ -52,19 +58,43 @@ type alias TimelogsWithProjectsRequest =
   , allProjects : List Project
   }
 
-type alias TimelogMutation =
+type alias CreateTimelogMutation =
   { description : String
   , duration : String
   , date : String
   , project : String
   }
 
-type alias TimelogInput =
-  { input : TimelogMutation  }
+type alias UpdateTimelogMutation =
+  { id : String
+  , description : String
+  , duration : String
+  , date : String
+  , project : String
+  }
+
 
 type alias CreateTimelogInput =
+  { input : CreateTimelogMutation }
+
+type alias UpdateTimelogInput =
+  { input : UpdateTimelogMutation }
+
+type alias CreateTimelogForm =
   { description : String
   , duration : Maybe TimeDelta
   , date : Maybe Date
   , project : String
   }
+
+type alias UpdateTimelogForm =
+  { id : String
+  , description : String
+  , duration : TimeDelta
+  , date : Date
+  , project : String
+  }
+
+type TimelogFormAction
+  = Create
+  | Update
