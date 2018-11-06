@@ -1,4 +1,4 @@
-module Page exposing (formInput, formSelect)
+module Page exposing (InputLength(..), formInput, formSelect)
 
 import Html as H exposing (..)
 import Html.Attributes as A exposing (..)
@@ -12,21 +12,32 @@ type alias SelectOption =
   , title : String
   }
 
+type InputLength
+  = Short
+  | Full
+
 onChange : (String -> msg) -> H.Attribute msg
 onChange handler =
     E.on "change" <| JD.map handler <| JD.at ["target", "value"] JD.string
 
+isFullwidth : InputLength -> Bool
+isFullwidth length =
+  case length of 
+    Short ->
+      False
+    Full ->
+      True
 
-formSelect : List SelectOption -> (String -> a) -> Maybe String -> Html a
-formSelect list msg value =
+formSelect : List SelectOption -> (String -> a) -> Maybe String -> InputLength -> Html a
+formSelect list msg value inputLength =
   H.div 
     [ A.class "field" ]
     [ H.label 
       [ A.class "label" ]
       [ H.div
-        [ A.class "control is-expanded" ]
+        [ A.classList [("control", True), ("is-expanded", isFullwidth inputLength)] ]
         [ H.div 
-          [ A.class "select is-fullwidth" ]
+          [ A.classList [("select", True), ("is-fullwidth", isFullwidth inputLength)] ]
           [ H.select
             [ onChange msg ]
             (List.map
@@ -56,8 +67,8 @@ formSelect list msg value =
       ]
     ]
 
-formInput : String -> String -> (String -> a) -> Maybe String -> Html a
-formInput type_ placeholder msg value =
+formInput : String -> String -> (String -> a) -> Maybe String -> InputLength -> Html a
+formInput type_ placeholder msg value inputLength =
   let
     attributes =
       case value of
@@ -71,7 +82,7 @@ formInput type_ placeholder msg value =
       [ H.label 
         [ A.class "label" ]
         [ H.div 
-          [ A.class "control" ]
+          [ A.classList [("control", True), ("is-expanded", isFullwidth inputLength)] ]
           [ H.input
             (List.append attributes
             [ A.class "input"

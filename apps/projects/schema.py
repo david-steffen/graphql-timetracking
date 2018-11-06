@@ -92,3 +92,26 @@ class UpdateProject(graphene.Mutation):
         project.save()
 
         return UpdateProject(project=project)
+
+
+class DeleteProjectInput(graphene.InputObjectType):
+    id = graphene.String(required=True)
+
+
+class DeleteProject(graphene.Mutation):
+    class Arguments:
+        input = DeleteProjectInput(required=True)
+
+    projectId = graphene.String()
+    ok = graphene.Boolean()
+
+    @staticmethod
+    def mutate(self, info, input=None):
+        projectId = input.get('id')
+        project = Project.objects.filter(members=info.context.user).get(pk=projectId)
+        ok = False
+        if project is not None:
+            project.delete()
+            ok = True
+
+        return DeleteProject(projectId=projectId, ok=ok)

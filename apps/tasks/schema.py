@@ -62,21 +62,25 @@ class CreateTask(graphene.Mutation):
         input = TaskInput(required=True)
 
     task = graphene.Field(TaskNode)
+    ok = graphene.Boolean()
 
     @staticmethod
     def mutate(self, info, input=None):
-        project = Project.objects.get(pk=input.get('project', ''))
-        task = Task(
-            user = info.context.user,
-            project = project,
-            duration = input.get('duration'),
-            description = input.get('description'),
-            date = input.get('date'),
-            logged = True
-        )
-        task.save()
+        project = Project.objects.get(pk=input.get('project'))
+        ok = False
+        if project is not None:
+            task = Task(
+                user = info.context.user,
+                project = project,
+                duration = input.get('duration'),
+                description = input.get('description'),
+                date = input.get('date'),
+                logged = True
+            )
+            task.save()
+            ok = True
 
-        return CreateTask(task=task)
+        return CreateTask(task=task, ok=ok)
 
 
 class UpdateTaskInput(TaskInput):
@@ -88,19 +92,45 @@ class UpdateTask(graphene.Mutation):
         input = UpdateTaskInput(required=True)
 
     task = graphene.Field(TaskNode)
+    ok = graphene.Boolean()
 
     @staticmethod
     def mutate(self, info, input=None):
         user = info.context.user
         task = Task.objects.filter(user=user).get(pk=input.get('id'))
         project = Project.objects.filter(members=user).get(pk=input.get('project'))
-        if task is not None:
+        ok = False
+        if task is not None and project is not None:
             task.duration = input.get('duration')
             task.description = input.get('description')
             task.date = input.get('date')
             task.logged = input.get('logged')
-            if project:
-                task.project = project
+            task.project = project
             task.save()
+            ok = True
 
-        return UpdateTask(task=task)
+        return UpdateTask(task=task, ok=ok)
+
+
+class DeleteTaskInput(graphene.InputObjectType):
+    id = graphene.String(required=True)
+
+
+class DeleteTask(graphene.Mutation):
+    class Arguments:
+        input = DeleteTaskInput(required=True)
+
+    taskId = graphene.String()
+    ok = graphene.Boolean()
+
+    @staticmethod
+    def mutate(self, info, input=None):
+        user = info.context.user
+        taskId = input.get('id')
+        task = Task.objects.filter(user=user).get(pk=input.get('id'))
+        ok = False
+        if task is not None:
+            task.delete()
+            ok = True
+
+        return DeleteTask(taskId=taskId, ok=ok)

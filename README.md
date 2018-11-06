@@ -2,7 +2,7 @@
 
 This is a simple time tracking app using Django for the backend and elm-lang lang for the single page app on the frontend.
 
-I was interested in learning about GraphQL so built this example. There are still features and styling missing like not being able to update or delete your times or projects but those will be added soon and will update this readme.
+I was interested in learning about GraphQL so built this example. There are still features and styling missing but will be added soon and will update this readme.
 
 ## Running locally
 

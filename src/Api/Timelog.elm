@@ -23,6 +23,7 @@ import GraphQL.Request.Builder exposing
   , list
   , request
   , mutationDocument
+  , bool
   )
 import GraphQL.Request.Builder.Arg as Arg
 import GraphQL.Request.Builder.Variable as Var
@@ -36,10 +37,14 @@ import Types.Timelog exposing
   , TimelogsWithProjectsRequest
   , CreateTimelogMutation
   , UpdateTimelogMutation
+  , DeleteTimelogMutation
   , CreateTimelogInput
   , UpdateTimelogInput
+  , DeleteTimelogInput
   , CreateTimelogForm
   , UpdateTimelogForm
+  , TimelogMutationResult
+  , TimelogDeleteMutationResult
   )
 
 
@@ -140,7 +145,7 @@ convertToCreateTimelogMutation timelog =
   in
     CreateTimelogMutation timelog.description durationString dateString timelog.project
 
-convertToUpdateTimelogMutation : Timelog -> UpdateTimelogMutation
+convertToUpdateTimelogMutation : UpdateTimelogForm -> UpdateTimelogMutation
 convertToUpdateTimelogMutation timelog =
   let
     id = 
@@ -149,9 +154,14 @@ convertToUpdateTimelogMutation timelog =
       Date.toIsoString timelog.date
     durationString =
       TimeDelta.toString timelog.duration
+    projectId = 
+      Uuid.toString timelog.project
   in
-    UpdateTimelogMutation id timelog.description durationString dateString (Uuid.toString timelog.project.id)
+    UpdateTimelogMutation id timelog.description durationString dateString projectId
 
+convertToDeleteTimelogMutation : Uuid -> DeleteTimelogMutation
+convertToDeleteTimelogMutation id =
+  DeleteTimelogMutation <| Uuid.toString id
 
 processCreateTimelogInput : CreateTimelogForm -> CreateTimelogInput
 processCreateTimelogInput timelog =
@@ -169,7 +179,15 @@ processUpdateTimelogInput timelog =
     { input = newTimeLog
     }
 
-createTimelogMutation : CreateTimelogInput -> Request Mutation Timelog
+processDeleteTimelogInput : Uuid -> DeleteTimelogInput
+processDeleteTimelogInput id =
+  let
+    newTimeLog = convertToDeleteTimelogMutation id
+  in
+    { input = newTimeLog
+    }
+
+createTimelogMutation : CreateTimelogInput -> Request Mutation TimelogMutationResult
 createTimelogMutation timelog =
   let
     taskVar =
@@ -187,28 +205,24 @@ createTimelogMutation timelog =
       extract
         (field "createTask"
           [ ("input", Arg.variable taskVar) ]
-          (extract (field "task" [] timelogObject))
+          (object TimelogMutationResult
+            |> with (field "task" [] timelogObject)
+            |> with (field "ok" [] bool)
+          )
         )
 
   in
     mutationDocument mutationRoot
-      |> request
-        { input =
-          { description = timelog.input.description
-          , project = timelog.input.project
-          , date = timelog.input.date
-          , duration = timelog.input.duration
-          }
-        }
+      |> request timelog
 
-updateTimelogMutation : UpdateTimelogInput -> Request Mutation Timelog
+updateTimelogMutation : UpdateTimelogInput -> Request Mutation TimelogMutationResult
 updateTimelogMutation timelog =
   let
     taskVar =
         Var.required "input"
         .input
-        (Var.object "TaskInput"
-            [ Var.field "id" .description Var.string
+        (Var.object "UpdateTaskInput"
+            [ Var.field "id" .id Var.string
             , Var.field "description" .description Var.string
             , Var.field "duration" .duration Var.string
             , Var.field "date" .date Var.string
@@ -220,17 +234,35 @@ updateTimelogMutation timelog =
       extract
         (field "updateTask"
           [ ("input", Arg.variable taskVar) ]
-          (extract (field "task" [] timelogObject))
+          (object TimelogMutationResult
+            |> with (field "task" [] timelogObject)
+            |> with (field "ok" [] bool)
+          )
         )
-
   in
     mutationDocument mutationRoot
-      |> request
-        { input =
-          { id = timelog.input.id
-          , description = timelog.input.description
-          , project = timelog.input.project
-          , date = timelog.input.date
-          , duration = timelog.input.duration
-          }
-        }
+      |> request timelog
+
+deleteTimelogMutation : DeleteTimelogInput -> Request Mutation TimelogDeleteMutationResult
+deleteTimelogMutation timelog =
+  let
+    taskVar =
+        Var.required "input"
+        .input
+        (Var.object "DeleteTaskInput"
+            [ Var.field "id" .id Var.string
+            ]
+        )
+
+    mutationRoot =
+      extract
+        (field "deleteTask"
+          [ ("input", Arg.variable taskVar) ]
+          (object TimelogDeleteMutationResult
+            |> with (field "taskId" [] uuid)
+            |> with (field "ok" [] bool)
+          )
+        )
+  in
+    mutationDocument mutationRoot
+      |> request timelog

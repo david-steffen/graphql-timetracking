@@ -20,7 +20,7 @@ import Task exposing (Task)
 import Types exposing (Model, Flags)
 import Types.Timelog exposing (TimelogsRequest, TimelogsWithProjectsRequest)
 import Types.Project exposing (ProjectsRequest)
-
+import Array exposing (Array)
 -- MAIN
 
 
@@ -88,10 +88,10 @@ update msg model =
       ( model, Cmd.none ) 
     ReceiveTimelogResponse (Ok response) ->
       let
-        mergedWithProjects = mergeWithProjects response.allTimelogs model.projectModel.projects
+        mergedWithProjects = mergeWithProjects response.allTimelogs (Array.toList model.projectModel.projects)
         timelogModel = model.timelogModel
         newTimelogModel = 
-          { timelogModel | timelogs = mergedWithProjects, readyTimes = True }
+          { timelogModel | timelogs = Array.fromList mergedWithProjects, readyTimes = True }
       in
         ( { model
           | timelogModel = newTimelogModel
@@ -105,10 +105,10 @@ update msg model =
         mergedWithProjects = mergeWithProjects response.allTimelogs response.allProjects
         timelogModel = model.timelogModel
         newTimelogModel = 
-          { timelogModel | timelogs = mergedWithProjects, readyTimes = True }
+          { timelogModel | timelogs = Array.fromList mergedWithProjects, readyTimes = True }
         projectModel = model.projectModel
         newProjectModel = 
-          { projectModel | projects = response.allProjects, readyProjects = True }
+          { projectModel | projects = Array.fromList response.allProjects, readyProjects = True }
       in
         ( { model
           | timelogModel = newTimelogModel
@@ -122,7 +122,7 @@ update msg model =
       let
         projectModel = model.projectModel
         newProjectModel = 
-          { projectModel | projects = response.allProjects, readyProjects = True }
+          { projectModel | projects = Array.fromList response.allProjects, readyProjects = True }
       in
         ( { model
           | projectModel = newProjectModel
@@ -218,12 +218,12 @@ view model =
   in
     { title =  title <| (Route.fromUrl model.url)
     , body =
-        [ H.main_ 
-          []
-          [ header model
-          , H.div 
-            [ A.class "main-wrap"
-            ]
+        [ header model
+        , H.section
+          [ A.class "section"
+          ]
+          [ H.div
+            [ A.class "container" ]
             [ viewPage model ]
           ]
         ]

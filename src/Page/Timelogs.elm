@@ -13,6 +13,8 @@ import Types.Timelog exposing
   , CreateTimelogForm
   , UpdateTimelogForm
   , TimelogFormAction(..)
+  , TimelogMutationResult
+  , TimelogDeleteMutationResult
   )
 import Types.Project exposing (Project)
 import Utils.TimeDelta exposing (..)
@@ -26,43 +28,51 @@ import Api exposing (sendQueryRequest, sendMutationRequest)
 import Api.Timelog exposing 
   ( processCreateTimelogInput
   , processUpdateTimelogInput
+  , processDeleteTimelogInput
   , createTimelogMutation
   , updateTimelogMutation
+  , deleteTimelogMutation
   , timelogsQuery
   , mergeWithProjects
   )
 import Task
 import Utils.TimeDelta as TimeDelta exposing (TimeDelta)
-import Page exposing (formInput, formSelect)
+import Page exposing (InputLength(..), formInput, formSelect)
 import Date exposing (Date)
-import Debug
+import Array exposing (..)
 
 init : TimelogModel
 init =
   { readyTimes = False
-  , timelogs = []
+  , timelogs = Array.empty
   , errResult = Nothing
   , createForm = Nothing
   , updateForm = Nothing
-  , formAction = Create
+  , formAction = Noop
   , isPendingTimelog = False
+  , deleteId = Nothing
   }
 
 
 type Msg
   = CreateTimelog
-  | ReceiveCreateTimelogMutationResponse (Result GraphQLClient.Error Timelog)
-  | ReceiveUpdateTimelogMutationResponse (Result GraphQLClient.Error Timelog)
+  | SubmitCreateTimelog
+  | ReceiveCreateTimelogMutationResponse (Result GraphQLClient.Error TimelogMutationResult)
+  | ReceiveUpdateTimelogMutationResponse (Result GraphQLClient.Error TimelogMutationResult)
+  | ReceiveDeleteTimelogMutationResponse (Result GraphQLClient.Error TimelogDeleteMutationResult)
   | InputCreateTimelogDescription String
   | InputCreateTimelogDate String
   | InputCreateTimelogDuration String
   | InputCreateTimelogProject String
-  | EditTimelog String
+  | EditTimelog Uuid
+  | SubmitEditTimelog
   | InputUpdateTimelogDescription String
   | InputUpdateTimelogDate String
   | InputUpdateTimelogDuration String
   | InputUpdateTimelogProject String
-  | DeleteTimelog String
+  | DeleteTimelog Uuid
+  | SubmitDeleteTimelog
+  | CloseFormModal
 
 --
 
@@ -70,6 +80,16 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ({timelogModel, projectModel} as model) =
   case msg of
     CreateTimelog ->
+      let
+        newTimelogModel = 
+          { timelogModel 
+          | formAction = Create
+          }  
+      in
+        ( passToModel newTimelogModel model
+        , sendCreateTimelogMutation model
+        )
+    SubmitCreateTimelog ->
       let
         newTimelogModel = 
           { timelogModel 
@@ -91,12 +111,12 @@ update msg ({timelogModel, projectModel} as model) =
         )
     ReceiveCreateTimelogMutationResponse (Ok response) ->
       let
-        reversed = List.reverse timelogModel.timelogs
-        timelogs = response :: reversed
+        timelogs = Array.push response.timelog timelogModel.timelogs
         newTimelogModel = 
           { timelogModel 
-          | timelogs = List.reverse timelogs 
+          | timelogs = timelogs 
           , createForm = Nothing
+          , formAction = Noop
           , isPendingTimelog = False
           }
       in
@@ -115,13 +135,49 @@ update msg ({timelogModel, projectModel} as model) =
         )
     ReceiveUpdateTimelogMutationResponse (Ok response) ->
       let
-        reversed = List.reverse timelogModel.timelogs
-        timelogs = response :: reversed
+        timelogPositions = 
+          Array.indexedMap (\i x ->
+              (i, x.id)
+            )
+            timelogModel.timelogs 
+        timelogPosition = Array.filter (\x -> (Tuple.second x) == response.timelog.id) timelogPositions
+        timelogIndex = 
+          case Array.get 0 timelogPosition of 
+            Just val ->
+              Tuple.first val
+            Nothing ->
+              0
+        timelogs = Array.set timelogIndex response.timelog timelogModel.timelogs
         newTimelogModel = 
           { timelogModel 
-          | timelogs = List.reverse timelogs 
-          , createForm = Nothing
+          | timelogs = timelogs
+          , updateForm = Nothing
+          , formAction = Noop
           , isPendingTimelog = False
+          }
+      in
+        ( passToModel newTimelogModel model
+        , Cmd.none
+        )
+    ReceiveDeleteTimelogMutationResponse (Err err) ->
+      let
+        newTimelogModel = 
+          { timelogModel 
+          | isPendingTimelog = False
+          }  
+      in
+        ( passToModel newTimelogModel model
+        , Cmd.none
+        )
+    ReceiveDeleteTimelogMutationResponse (Ok response) ->
+      let
+        timelogs = Array.filter (\x -> response.timelogId /= x.id) timelogModel.timelogs
+        newTimelogModel = 
+          { timelogModel 
+          | timelogs = timelogs
+          , isPendingTimelog = False
+          , formAction = Noop 
+          , deleteId = Nothing
           }
       in
         ( passToModel newTimelogModel model
@@ -180,7 +236,36 @@ update msg ({timelogModel, projectModel} as model) =
         , Cmd.none
         )
     EditTimelog id ->
-      ( model, Cmd.none )
+      let
+        filtered = Array.filter (\x ->
+            x.id == id
+          ) 
+          timelogModel.timelogs
+        timelog = 
+          case Array.get 0 filtered of 
+            Just value ->
+              Just (UpdateTimelogForm value.id value.description value.duration value.date value.project.id)
+            Nothing ->
+              Nothing
+      in
+        ( passToModel 
+          { timelogModel 
+          | updateForm = timelog
+          , formAction = Update
+          }
+          model
+        , Cmd.none
+        )
+    SubmitEditTimelog ->
+      let
+        newTimelogModel = 
+          { timelogModel 
+          | isPendingTimelog = True
+          }  
+      in
+        ( passToModel newTimelogModel model
+        , sendUpdateTimelogMutation model
+        )
     InputUpdateTimelogDescription string ->
       case timelogModel.updateForm of 
         Just updateForm ->
@@ -201,10 +286,15 @@ update msg ({timelogModel, projectModel} as model) =
       case timelogModel.updateForm of 
         Just updateForm ->
           let
+            date = Date.fromIsoString string |> Result.toMaybe
             newTimelog =
-              { updateForm
-                | date = Date.fromIsoString string |> Result.toMaybe
-              }
+              case date of 
+                Just val ->
+                  { updateForm
+                    | date = val
+                  }
+                Nothing ->
+                  updateForm
           in
             ( passToModel 
               { timelogModel | updateForm = Just newTimelog }
@@ -217,10 +307,15 @@ update msg ({timelogModel, projectModel} as model) =
       case timelogModel.updateForm of 
         Just updateForm ->
           let
+            timeDelta = TimeDelta.fromString string |> Result.toMaybe
             newTimelog =
-              { updateForm
-                | duration = TimeDelta.fromString string |> Result.toMaybe
-              }
+              case timeDelta of 
+                Just val ->
+                  { updateForm
+                    | duration = val
+                  }
+                Nothing ->
+                  updateForm
           in
             ( passToModel 
               { timelogModel | updateForm = Just newTimelog }
@@ -233,10 +328,15 @@ update msg ({timelogModel, projectModel} as model) =
       case timelogModel.updateForm of 
         Just updateForm ->
           let
+            projectId = Uuid.fromString string
             newTimelog =
-              { updateForm
-                | project = string
-              }
+              case projectId of 
+                Just val ->
+                  { updateForm
+                    | project = val
+                  }
+                Nothing ->
+                  updateForm
           in
             ( passToModel 
               { timelogModel | updateForm = Just newTimelog }
@@ -246,7 +346,33 @@ update msg ({timelogModel, projectModel} as model) =
         Nothing ->
           ( model, Cmd.none )
     DeleteTimelog id ->
-      ( model, Cmd.none )
+      ( passToModel 
+        { timelogModel 
+        | deleteId = Just id
+        , formAction = Delete
+        }
+        model
+      , Cmd.none
+      )
+    SubmitDeleteTimelog->
+      ( passToModel 
+        { timelogModel 
+        | isPendingTimelog = True
+        }
+        model
+      , sendDeleteTimelogMutation model
+      )
+    CloseFormModal ->
+      ( passToModel 
+        { timelogModel 
+        | formAction = Noop 
+        , updateForm = Nothing
+        , createForm = Nothing
+        , deleteId = Nothing
+        }
+        model
+      , Cmd.none
+      )
     
 
 hasCreateTimelogForm : Maybe CreateTimelogForm -> CreateTimelogForm
@@ -278,24 +404,52 @@ sendUpdateTimelogMutation  ({timelogModel} as model) =
         |> Task.attempt ReceiveUpdateTimelogMutationResponse
     Nothing ->
       Cmd.none
+
+sendDeleteTimelogMutation : Model -> Cmd Msg
+sendDeleteTimelogMutation ({timelogModel} as model) =
+  case timelogModel.deleteId of 
+    Just id ->
+      sendMutationRequest model.csrf (deleteTimelogMutation <| processDeleteTimelogInput id)
+        |> Task.attempt ReceiveDeleteTimelogMutationResponse
+    Nothing ->
+      Cmd.none
     
 view : Model -> Html Msg
 view model =
   H.div 
     []
-    [ H.h2 
-      [ A.class "title" 
-      ] 
-      [ H.text "Times" 
-      ]
-    , H.div 
-      []
-      [ timeLogSide model 
+    [ H.div
+      [ A.class "level" ]
+      [ H.div
+        [ A.class "level-left" ]
+        [ H.h2 
+          [ A.class "title" 
+          ] 
+          [ H.text "Times"]
+        ]
+      , H.div
+        [ A.class "level-right" ]
+        [ H.button
+          [ A.class "button is-success" 
+          , E.onClick CreateTimelog
+          ]
+          [ H.span
+            [ A.class "icon is-small" ]
+            [ H.span
+              [ A.class "fas fa-plus-circle" ]
+              []
+            ]
+          , H.span
+            []
+            [ H.text "New" ]
+          ]
+        ]
       ]
     , H.div 
       []
       [ timeLogList model 
       ]
+    , formModal model 
     ]
 
 startOfWeek : Date -> (Int, Int, Int)
@@ -329,7 +483,7 @@ formatDate date =
 timeLogList : Model -> Html Msg
 timeLogList { timelogModel } =
   let
-    groupedLogs = groupByWeek timelogModel.timelogs
+    groupedLogs = groupByWeek <| Array.toList timelogModel.timelogs
   in
     H.div
       []
@@ -351,7 +505,7 @@ groupSeparator dateTuple =
         [ H.text <| formatDate newDate ]
       ]
 
-groupByTimeLogDate : ((Int, Int, Int),List Timelog) -> Html Msg
+groupByTimeLogDate : ((Int, Int, Int), List Timelog) -> Html Msg
 groupByTimeLogDate timeLogGroup =
   H.div []
     [ groupSeparator (Tuple.first timeLogGroup)
@@ -401,12 +555,15 @@ actions id =
   H.div
     []
     [ H.span
-      [ A.class "fas fa-pen"
-      , E.onClick <| EditTimelog id
+      [ A.class "icon" ]
+      [ H.span
+        [ A.class "fas fa-pen"
+        , E.onClick <| EditTimelog id
+        ]
+        []
       ]
-      []
     , H.span
-      [ A.class "far fa-times-circle"
+      [ A.class "delete"
       , E.onClick <| DeleteTimelog id
       ]
       [] 
@@ -426,24 +583,36 @@ createTimelogForm ( {timelogModel, projectModel} as model) =
         False ->
           H.button
             [ A.class "button is-primary"
-            , E.onClick CreateTimelog
+            , E.onClick SubmitCreateTimelog
             ]
             [ H.text "Submit" ]
   in
     H.div 
-      [ A.class "column is-half" ]
-      [ formInput "text" "Description" InputCreateTimelogDescription Nothing
-      , formInput "date" "Date" InputCreateTimelogDate Nothing
-      , formSelect (List.map (\project -> {value = Uuid.toString project.id, title = project.name}) projectModel.projects) InputCreateTimelogProject Nothing
-      , formInput "time" "Duration" InputCreateTimelogDuration Nothing
+      []
+      [ H.h3
+        [ A.class "title" ]
+        [ H.text "Add" ]
+      , formInput "text" "Description" InputCreateTimelogDescription Nothing Full
+      , formInput "date" "Date" InputCreateTimelogDate Nothing Full
+      , formSelect (List.map (\project -> {value = Uuid.toString project.id, title = project.name}) (Array.toList projectModel.projects)) InputCreateTimelogProject Nothing Full
+      , formInput "time" "Duration" InputCreateTimelogDuration Nothing Short
       , H.div [ A.class "field" ]
-        [ H.div [ A.class "control" ]
-          [ button
+        [ H.div 
+          [ A.class "control" ]
+          [ H.div
+            [ A.class "buttons" ]
+            [ button
+            , H.button
+              [ A.class "button is-text"
+              , E.onClick CloseFormModal
+              ]
+              [ H.text "Cancel" ]
+            ]
           ]
         ]
       ]
 
-updateTimelogForm : UpdateTimelogForm -> List Project -> Bool -> Html Msg
+updateTimelogForm : UpdateTimelogForm -> Array Project -> Bool -> Html Msg
 updateTimelogForm timelog projects isPending =
   let
     button = 
@@ -457,26 +626,84 @@ updateTimelogForm timelog projects isPending =
         False ->
           H.button
             [ A.class "button is-primary"
-            , E.onClick <| EditTimelog timelog.id
+            , E.onClick <| SubmitEditTimelog
             ]
             [ H.text "Submit" ]
   in
     H.div 
-      [ A.class "column is-half" ]
-      [ formInput "text" "Description" InputUpdateTimelogDescription (Just timelog.description )
-      , formInput "date" "Date" InputUpdateTimelogDate (Just (Date.toIsoString timelog.date))
-      , formSelect (List.map (\project -> {value = Uuid.toString project.id, title = project.name}) projects) InputCreateTimelogProject ( Just timelog.project)
-      , formInput "time" "Duration" InputUpdateTimelogDuration (Just (TimeDelta.toString timelog.duration))
-      , H.div [ A.class "field" ]
-        [ H.div [ A.class "control" ]
-          [ button
+      []
+      [ H.h3
+        [ A.class "title" ]
+        [ H.text "Update" ]
+      , formInput "text" "Description" InputUpdateTimelogDescription (Just timelog.description) Full
+      , formInput "date" "Date" InputUpdateTimelogDate (Just (Date.toIsoString timelog.date)) Full
+      , formSelect (List.map (\project -> {value = Uuid.toString project.id, title = project.name}) (Array.toList projects)) InputUpdateTimelogProject ( Just (Uuid.toString timelog.project)) Full
+      , formInput "time" "Duration" InputUpdateTimelogDuration (Just (TimeDelta.toString timelog.duration)) Short
+      , H.div 
+        [ A.class "field" ]
+        [ H.div 
+          [ A.class "control" ]
+          [ H.div
+            [ A.class "buttons" ]
+            [ button
+            , H.button
+              [ A.class "button is-text"
+              , E.onClick CloseFormModal
+              ]
+              [ H.text "Cancel" ]
+            ]
+          ]
+        ]
+      ]
+
+deleteTimelogForm : Model -> Html Msg
+deleteTimelogForm ( {timelogModel, projectModel} as model) =
+  let
+    button = 
+      case timelogModel.isPendingTimelog of
+        True ->
+          H.button
+            [ A.class "button is-primary is-loading"
+            , A.attribute "disabled" "disabled"
+            ]
+            [ H.text "Submit" ]
+        False ->
+          H.button
+            [ A.class "button is-primary"
+            , E.onClick <| SubmitDeleteTimelog
+            ]
+            [ H.text "Submit" ]
+  in
+    H.div 
+      []
+      [ H.h3
+        [ A.class "title" ]
+        [ H.text "Delete" ]
+      , H.p
+        [ A.class "field" ]
+        [ H.text "Are you sure you want to delete this log?" ]
+      , H.div 
+        [ A.class "field" ]
+        [ H.div 
+          [ A.class "control" ]
+          [ H.div
+            [ A.class "buttons" ]
+            [ button
+            , H.button
+              [ A.class "button is-text"
+              , E.onClick CloseFormModal
+              ]
+              [ H.text "Cancel" ]
+            ]
           ]
         ]
       ]
 
 timelogForm : Model -> Html Msg
-timelogForm ( {timelogModel, projectModel} as model) = 
+timelogForm ({timelogModel, projectModel} as model) = 
   case timelogModel.formAction of 
+    Noop ->
+      H.div [] []
     Create ->
       createTimelogForm model
     Update ->
@@ -485,6 +712,38 @@ timelogForm ( {timelogModel, projectModel} as model) =
           updateTimelogForm form projectModel.projects timelogModel.isPendingTimelog
         Nothing ->
           createTimelogForm model
+    Delete ->
+      deleteTimelogForm model
+
+formModal : Model -> Html Msg
+formModal model =
+  let
+    showModal =
+      case model.timelogModel.formAction of 
+        Noop ->
+          False
+        _ ->
+          True
+  in
+    H.div 
+      [ A.classList [("modal", True), ("is-active", showModal) ] ]
+      [ H.div
+        [ A.class "modal-background" ]
+        []
+      , H.div 
+        [ A.class "modal-content" ]
+        [ H.div
+          [ A.class "box" ]
+          [ timelogForm model ]
+        ]
+      , H.button
+        [ A.class "modal-close is-large"
+        , A.attribute "aria-label" "close"
+        , E.onClick CloseFormModal
+        ]
+        []
+      ]
+
 
 timeLogSide : Model -> Html Msg
 timeLogSide model =

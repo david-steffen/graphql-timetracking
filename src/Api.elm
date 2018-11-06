@@ -11,7 +11,12 @@ import GraphQL.Request.Builder exposing
   , Request
   , Query
   , Mutation
+  , ObjectType
   , customScalar
+  , object
+  , with
+  , bool
+  , field
   )
 import GraphQL.Client.Http as GraphQLClient
 import Http exposing (header)
@@ -48,6 +53,8 @@ requestOptions csrf =
   , timeout = Nothing
   , withCredentials = False
   }
+
+
 
 sendQueryRequest : String -> Request Query a -> Task GraphQLClient.Error a
 sendQueryRequest csrf request =
