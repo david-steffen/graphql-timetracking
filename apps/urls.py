@@ -13,7 +13,7 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.urls import include, path
+from django.urls import include, path, re_path
 from apps.common.views import PrivateGraphQLView
 from django.contrib.auth import views as auth_views
 from django.contrib import admin
@@ -23,8 +23,8 @@ import apps.client.views as views
 urlpatterns = [
     path('admin', admin.site.urls),
     path('graphql', PrivateGraphQLView.as_view(graphiql=True)),
-    path('times/', views.index, name='index'),
-    path('projects/', views.index, name='index'),
-    path('', views.index, name='index'),
     path('accounts/login/', auth_views.LoginView.as_view(template_name='account/login.html'),name='login'),
+    path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
+    path('accounts/register/', views.register, name='register'),
+    re_path(r'^.*$', views.index, name='index'),
 ]

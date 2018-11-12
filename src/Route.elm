@@ -1,12 +1,14 @@
-module Route exposing (Route(..), fromUrl, toString)
+module Route exposing (Route(..), fromUrl)
 
-import Url.Parser as Parser exposing (Parser, top, map, oneOf, s)
+import Url.Parser as Parser exposing (Parser, (</>), oneOf, top, map, custom, s)
 import Url exposing (Url)
-import Debug
+import Uuid exposing (Uuid, fromString)
 
 type Route
   = TimelogsR
   | ProjectsR
+  | AddProjectR
+  | EditProjectR Uuid
   | AboutR
   | NotFoundR
 
@@ -15,6 +17,8 @@ routeParser =
   oneOf
     [ map TimelogsR  top
     , map ProjectsR  (s "projects")
+    , map AddProjectR  (s "projects" </> s "add")
+    , map EditProjectR  (s "projects" </> s "edit" </> uuid)
     , map AboutR     (s "about")
     ]
 
@@ -28,19 +32,6 @@ fromUrl url =
     Nothing ->
       NotFoundR
 
-toString : Route -> String
-toString page =
-  let
-    name =
-      case page of
-        TimelogsR ->
-          ""
-        ProjectsR ->
-          "projects"
-        AboutR ->
-          "about"
-        _ ->
-          "404"
-
-  in
-    "/" ++ name
+uuid : Parser (Uuid -> a) a
+uuid =
+  custom "UUID" Uuid.fromString

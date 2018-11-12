@@ -31,7 +31,7 @@ import GraphQL.Client.Http as GraphQLClient
 import Task exposing (Task)
 import Uuid exposing (Uuid)
 import Types.Timelog exposing 
-  ( TimelogQuery
+  ( Timelog
   , ProjectRefQuery
   , TimelogsRequest
   , TimelogsWithProjectsRequest
@@ -47,47 +47,17 @@ import Types.Timelog exposing
   , TimelogDeleteMutationResult
   )
 
-
-mergeWithProjects : List TimelogQuery -> List Project -> List Timelog  
-mergeWithProjects timelogs projects =
-  List.map
-    (\timelog ->
-      let
-        projectFiltered = List.filter (\x -> x.id == timelog.project.id) projects
-        project =
-          List.head projectFiltered
-            |> Maybe.withDefault 
-              { id = timelog.project.id
-              , name = ""
-              , colour = ""
-              , company = ""
-              , abbreviation = ""
-              }
-      in
-        Timelog timelog.id timelog.description timelog.duration timelog.date project
-    )
-    timelogs
-
 projectRefObject : ValueSpec NonNull ObjectType ProjectRefQuery vars
 projectRefObject =
   object ProjectRefQuery
     |> with (field "id" [] uuid)
-
-timelogsObject : ValueSpec NonNull ObjectType TimelogQuery vars
-timelogsObject =
-  object TimelogQuery
-    |> with (field "id" [] uuid)
-    |> with (field "description" [] string)
-    |> with (field "duration" [] timeDelta)
-    |> with (field "date" [] date)
-    |> with (field "project" [] projectRefObject)
 
 timelogsQuery : Request Query TimelogsRequest
 timelogsQuery =
   let
     queryRoot =
       object TimelogsRequest
-        |> with (field "allTimelogs" [] (list timelogsObject))
+        |> with (field "allTimelogs" [] (list timelogObject))
   in
     queryDocument queryRoot |> request ()
 
@@ -96,7 +66,7 @@ timelogsWithProjectsQuery =
   let
     queryRoot =
       object TimelogsWithProjectsRequest
-        |> with (field "allTimelogs" [] (list timelogsObject))
+        |> with (field "allTimelogs" [] (list timelogObject))
         |> with (field "allProjects" [] (list projectsObject))
   in
     queryDocument queryRoot |> request ()
@@ -108,7 +78,7 @@ timelogObject =
     |> with (field "description" [] string)
     |> with (field "duration" [] timeDelta)
     |> with (field "date" [] date)
-    |> with (field "project" [] projectsObject)
+    |> with (field "project" [] projectRefObject)
 
 timelogQuery : Request Query Timelog
 timelogQuery =

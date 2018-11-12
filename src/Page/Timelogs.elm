@@ -33,7 +33,6 @@ import Api.Timelog exposing
   , updateTimelogMutation
   , deleteTimelogMutation
   , timelogsQuery
-  , mergeWithProjects
   )
 import Task
 import Utils.TimeDelta as TimeDelta exposing (TimeDelta)
@@ -49,7 +48,7 @@ init =
   , createForm = Nothing
   , updateForm = Nothing
   , formAction = Noop
-  , isPendingTimelog = False
+  , isPending = False
   , deleteId = Nothing
   }
 
@@ -93,7 +92,7 @@ update msg ({timelogModel, projectModel} as model) =
       let
         newTimelogModel = 
           { timelogModel 
-          | isPendingTimelog = True
+          | isPending = True
           }  
       in
         ( passToModel newTimelogModel model
@@ -103,7 +102,7 @@ update msg ({timelogModel, projectModel} as model) =
       let
         newTimelogModel = 
           { timelogModel 
-          | isPendingTimelog = False
+          | isPending = False
           }  
       in
         ( passToModel newTimelogModel model
@@ -117,7 +116,7 @@ update msg ({timelogModel, projectModel} as model) =
           | timelogs = timelogs 
           , createForm = Nothing
           , formAction = Noop
-          , isPendingTimelog = False
+          , isPending = False
           }
       in
         ( passToModel newTimelogModel model
@@ -127,7 +126,7 @@ update msg ({timelogModel, projectModel} as model) =
       let
         newTimelogModel = 
           { timelogModel 
-          | isPendingTimelog = False
+          | isPending = False
           }  
       in
         ( passToModel newTimelogModel model
@@ -153,7 +152,7 @@ update msg ({timelogModel, projectModel} as model) =
           | timelogs = timelogs
           , updateForm = Nothing
           , formAction = Noop
-          , isPendingTimelog = False
+          , isPending = False
           }
       in
         ( passToModel newTimelogModel model
@@ -163,7 +162,7 @@ update msg ({timelogModel, projectModel} as model) =
       let
         newTimelogModel = 
           { timelogModel 
-          | isPendingTimelog = False
+          | isPending = False
           }  
       in
         ( passToModel newTimelogModel model
@@ -175,7 +174,7 @@ update msg ({timelogModel, projectModel} as model) =
         newTimelogModel = 
           { timelogModel 
           | timelogs = timelogs
-          , isPendingTimelog = False
+          , isPending = False
           , formAction = Noop 
           , deleteId = Nothing
           }
@@ -260,7 +259,7 @@ update msg ({timelogModel, projectModel} as model) =
       let
         newTimelogModel = 
           { timelogModel 
-          | isPendingTimelog = True
+          | isPending = True
           }  
       in
         ( passToModel newTimelogModel model
@@ -357,7 +356,7 @@ update msg ({timelogModel, projectModel} as model) =
     SubmitDeleteTimelog->
       ( passToModel 
         { timelogModel 
-        | isPendingTimelog = True
+        | isPending = True
         }
         model
       , sendDeleteTimelogMutation model
@@ -481,13 +480,14 @@ formatDate date =
   Date.format "d/M/y" date
 
 timeLogList : Model -> Html Msg
-timeLogList { timelogModel } =
+timeLogList ({ timelogModel, projectModel } as model) =
   let
     groupedLogs = groupByWeek <| Array.toList timelogModel.timelogs
+    curriedGroupByDate = groupByDate (Array.toList projectModel.projects)
   in
     H.div
       []
-      (List.map groupByTimeLogDate groupedLogs)
+      (List.map curriedGroupByDate groupedLogs)
 
 groupSeparator : (Int, Int, Int) -> Html Msg
 groupSeparator dateTuple =
@@ -496,7 +496,7 @@ groupSeparator dateTuple =
     newDate = Date.add Days 6 date
   in
     H.div 
-      [ A.class "subtitle has-text-centered group-separator" ]
+      [ A.class "title is-6 has-text-centered group-separator" ]
       [ H.span 
         [] 
         [ H.text <| formatDate date ]
@@ -505,50 +505,56 @@ groupSeparator dateTuple =
         [ H.text <| formatDate newDate ]
       ]
 
-groupByTimeLogDate : ((Int, Int, Int), List Timelog) -> Html Msg
-groupByTimeLogDate timeLogGroup =
+groupByDate : List Project -> ((Int, Int, Int), List Timelog) -> Html Msg
+groupByDate projects timeLogGroup =
   H.div []
     [ groupSeparator (Tuple.first timeLogGroup)
     , H.div 
       [ A.class "row-group" ] 
-      (List.map (\x -> timeLogView x) (Tuple.second timeLogGroup))
+      (List.map (\x -> timeLogView projects x) (Tuple.second timeLogGroup))
     ]
 
-timeLogView: Timelog -> Html Msg
-timeLogView timelog =
-  H.div
-    [ A.class "custom-box"
-    ]
-    [ H.div
-      [ A.class "media" ]
+timeLogView: List Project -> Timelog -> Html Msg
+timeLogView projects timelog =
+  let
+    projectFiltered = List.filter (\x -> x.id == timelog.project.id) projects
+    project =
+      List.head projectFiltered
+        |> Maybe.withDefault (Project timelog.project.id "" "" "" "")
+  in
+    H.div
+      [ A.class "custom-box"
+      ]
       [ H.div
-        [ A.class "media-left" ]
+        [ A.class "media" ]
         [ H.div
-          [ A.class "project-circle title is-6 has-text-centered"
-          , A.style "border-color" timelog.project.colour
+          [ A.class "media-left" ]
+          [ H.div
+            [ A.class "project-circle title is-6 has-text-centered"
+            , A.style "border-color" project.colour
+            ]
+            [ H.text (totalTime timelog.duration)
+            ]
           ]
-          [ H.text (totalTime timelog.duration)
-          ]
-        ]
-      , H.div
-        [ A.class "media-content" ]
-        [ H.div
-          [ A.class "content" ]
-          [ H.p
-            [ A.class "has-text-weight-bold" ]
-            [ H.text <| Date.format "d/M/y" timelog.date
-            , H.br [] []
-            , H.text timelog.project.name
+        , H.div
+          [ A.class "media-content" ]
+          [ H.div
+            [ A.class "content" ]
+            [ H.p
+              [ A.class "has-text-weight-bold" ]
+              [ H.text <| Date.format "d/M/y" timelog.date
+              , H.br [] []
+              , H.text project.name
+              ]
             ]
           ]
         ]
+      , H.p
+        [ A.class "is-size-7" ]
+        [ H.text timelog.description
+        ]
+      , actions timelog.id
       ]
-    , H.p
-      [ A.class "is-size-7" ]
-      [ H.text timelog.description
-      ]
-    , actions timelog.id
-    ]
 
 actions : Uuid -> Html Msg
 actions id =
@@ -573,7 +579,7 @@ createTimelogForm : Model -> Html Msg
 createTimelogForm ( {timelogModel, projectModel} as model) =
   let
     button = 
-      case timelogModel.isPendingTimelog of
+      case timelogModel.isPending of
         True ->
           H.button
             [ A.class "button is-primary is-loading"
@@ -660,7 +666,7 @@ deleteTimelogForm : Model -> Html Msg
 deleteTimelogForm ( {timelogModel, projectModel} as model) =
   let
     button = 
-      case timelogModel.isPendingTimelog of
+      case timelogModel.isPending of
         True ->
           H.button
             [ A.class "button is-primary is-loading"
@@ -709,7 +715,7 @@ timelogForm ({timelogModel, projectModel} as model) =
     Update ->
       case timelogModel.updateForm of
         Just form ->
-          updateTimelogForm form projectModel.projects timelogModel.isPendingTimelog
+          updateTimelogForm form projectModel.projects timelogModel.isPending
         Nothing ->
           createTimelogForm model
     Delete ->

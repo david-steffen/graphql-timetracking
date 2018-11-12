@@ -1,22 +1,4 @@
-module Types.Timelog exposing 
-  ( Timelog
-  , TimelogModel
-  , TimelogQuery
-  , ProjectRefQuery
-  , TimelogsRequest
-  , TimelogsWithProjectsRequest
-  , CreateTimelogMutation
-  , UpdateTimelogMutation
-  , DeleteTimelogMutation
-  , CreateTimelogForm
-  , UpdateTimelogForm
-  , CreateTimelogInput
-  , UpdateTimelogInput
-  , DeleteTimelogInput
-  , TimelogFormAction(..)
-  , TimelogMutationResult
-  , TimelogDeleteMutationResult
-  )
+module Types.Timelog exposing (..)
 
 import Array exposing (Array)
 import Uuid exposing (Uuid)
@@ -31,11 +13,11 @@ type alias TimelogModel =
   , updateForm : Maybe UpdateTimelogForm
   , formAction : TimelogFormAction
   , errResult : Maybe String
-  , isPendingTimelog : Bool
+  , isPending : Bool
   , deleteId : Maybe Uuid
   }
 
-type alias Timelog =
+type alias TimelogWithProject =
   { id : Uuid
   , description : String
   , duration : TimeDelta
@@ -43,7 +25,7 @@ type alias Timelog =
   , project : Project
   }
 
-type alias TimelogQuery =
+type alias Timelog =
   { id : Uuid
   , description : String
   , duration : TimeDelta
@@ -56,11 +38,11 @@ type alias ProjectRefQuery =
   }
 
 type alias TimelogsRequest =
-  { allTimelogs : List TimelogQuery
+  { allTimelogs : List Timelog
   }
 
 type alias TimelogsWithProjectsRequest =
-  { allTimelogs : List TimelogQuery
+  { allTimelogs : List Timelog
   , allProjects : List Project
   }
 

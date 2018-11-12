@@ -1,37 +1,65 @@
 from apps.projects.models import Project, ProjectMember
+from apps.accounts.schema import UserNode, AccountNode
 import graphene
-from graphene_django.types import DjangoObjectType
+from graphene_django.types import DjangoObjectType, ObjectType
+
+
+class MemberNode(ObjectType):
+    id = graphene.UUID()
+    user = graphene.Field(UserNode)
+
+    def resolve_user(self, info, **kwargs):
+        return self
+
 
 class ProjectNode(DjangoObjectType):
+    members = graphene.List(MemberNode)
+
     class Meta:
         model = Project
 
     @classmethod
     def get_node(cls, id, context, info):
         try:
-            project = cls._meta.model.objects.filter(members=context.user).get(id=id)
+            return cls._meta.model.objects.filter(members=context.user).get(id=id)
         except cls._meta.model.DoesNotExist:
             return None
 
-        return None
+    def resolve_members(self, info, **kwargs):
+        return self.members.all()
+
+
+class ProjectMemberNode(ObjectType):
+    id = graphene.UUID()
+    project = graphene.Field(ProjectNode, id=graphene.UUID())
+    user = graphene.Field(UserNode, id=graphene.UUID())
+    account = graphene.Field(AccountNode, id=graphene.UUID())
+    created = graphene.types.datetime.DateTime()
+
+    @classmethod
+    def get_node(cls, id, context, info):
+        try:
+            return cls._meta.model.objects.filter(project=id)
+        except cls._meta.model.DoesNotExist:
+            return None
 
 
 class Query(object):
-    project = graphene.Field(ProjectNode, id=graphene.UUID())
+    project = graphene.Field(ProjectNode, id=graphene.String())
     all_projects = graphene.List(ProjectNode)
 
     def resolve_all_projects(self, info, **kwargs):
         if not info.context.user.is_authenticated:
-            return Project.objects.none()
+            return None
         else:
-            return Project.objects.filter(members=info.context.user)
+            return Project.objects.filter(account=info.context.user.account)
 
     def resolve_project(self, info, **kwargs):
         id = kwargs.get('id')
-
-        if id is not None:
-            return Project.objects.get(pk=id)
-
+        if not info.context.user.is_authenticated:
+            return None
+        elif id is not None:
+            return Project.objects.filter(account=info.context.user.account).get(id=id)
         return None
 
 
@@ -41,6 +69,7 @@ class ProjectInput(graphene.InputObjectType):
     name = graphene.String(required=True)
     company = graphene.String()
     status = graphene.Boolean()
+    members = graphene.List(graphene.String)
 
 
 class CreateProject(graphene.Mutation):
@@ -48,6 +77,7 @@ class CreateProject(graphene.Mutation):
         input = ProjectInput(required=True)
 
     project = graphene.Field(ProjectNode)
+    project_members = graphene.Field(ProjectMemberNode)
 
     @staticmethod
     def mutate(self, info, input=None):
@@ -79,19 +109,22 @@ class UpdateProject(graphene.Mutation):
         input = UpdateProjectInput(required=True)
 
     project = graphene.Field(ProjectNode)
+    ok = graphene.Boolean()
 
     @staticmethod
     def mutate(self, info, input=None):
         project = Project.objects.filter(members=info.context.user).get(pk=input.get('id'))
+        ok = False
+        if project is not None:
+            project.colour = input.get('colour', '#333333')
+            project.abbreviation = input.get('abbreviation', '')
+            project.name = input.get('name', '')
+            project.company = input.get('company', '')
+            project.status = input.get('status', False)
+            project.save()
+            ok = True
 
-        project.colour = input.get('colour', '#333333')
-        project.abbreviation = input.get('abbreviation', '')
-        project.name = input.get('name', '')
-        project.company = input.get('company', '')
-        project.status = input.get('status', False)
-        project.save()
-
-        return UpdateProject(project=project)
+        return UpdateProject(project=project, ok=ok)
 
 
 class DeleteProjectInput(graphene.InputObjectType):

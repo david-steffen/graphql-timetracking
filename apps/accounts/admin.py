@@ -2,7 +2,7 @@ from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.forms import ReadOnlyPasswordHashField
-from apps.accounts.models import User
+from apps.accounts.models import User, Account
 
 
 class UserCreationForm(forms.ModelForm):
@@ -77,3 +77,4 @@ class UserAdmin(BaseUserAdmin):
     filter_horizontal = ()
 
 admin.site.register(User, UserAdmin)
+admin.site.register(Account)

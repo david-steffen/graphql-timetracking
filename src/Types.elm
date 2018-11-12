@@ -4,7 +4,8 @@ import Browser.Navigation as Nav
 import Url
 import Route exposing (..)
 import Types.Timelog exposing (TimelogModel)
-import Types.Project exposing (ProjectModel)
+import Types.Project exposing (ProjectModel, AddProjectModel, EditProjectModel)
+import Types.User exposing (UserModel)
 
 type alias Model =
   { key : Nav.Key
@@ -12,6 +13,9 @@ type alias Model =
   , csrf : String
   , timelogModel : TimelogModel
   , projectModel : ProjectModel
+  , addProjectModel : AddProjectModel
+  , editProjectModel : EditProjectModel
+  , userModel : UserModel
   , showMenu : Bool
   }
 

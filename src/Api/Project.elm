@@ -8,11 +8,16 @@ import Types.Project exposing
   , CreateProjectInput
   , UpdateProjectMutation
   , UpdateProjectInput
+  , ProjectMutationResult
   , ProjectDeleteMutationResult
   , DeleteProjectInput
   , DeleteProjectMutation
+  , ProjectMember
+  , ProjectWithMembers
+  , EditProjectRequest
   )
 import Api exposing (..)
+import Api.User exposing (userObject)
 import GraphQL.Request.Builder exposing 
   ( ObjectType
   , ValueSpec
@@ -36,7 +41,22 @@ import GraphQL.Request.Builder.Arg as Arg
 import GraphQL.Request.Builder.Variable as Var
 import Uuid exposing (Uuid)
 
-projectsObject  : ValueSpec NonNull  ObjectType (Project) vars
+projectsMembersObject : ValueSpec NonNull  ObjectType (ProjectMember) vars
+projectsMembersObject =
+  object ProjectMember
+      |> with (field "user" [] userObject)
+
+projectWithMembersObject : ValueSpec NonNull  ObjectType (ProjectWithMembers) vars
+projectWithMembersObject =
+  object ProjectWithMembers
+      |> with (field "id" [] uuid)
+      |> with (field "name" [] string)
+      |> with (field "colour" [] string)
+      |> with (field "company" [] string)
+      |> with (field "abbreviation" [] string)
+      |> with (field "members" [] (list projectsMembersObject))
+
+projectsObject : ValueSpec NonNull  ObjectType (Project) vars
 projectsObject =
   object Project
       |> with (field "id" [] uuid)
@@ -54,6 +74,38 @@ projectsQuery =
   in
     queryDocument queryRoot |> request ()
 
+projectQuery : Uuid -> Request Query ProjectWithMembers
+projectQuery uuid =
+  let
+    projectIDVar =
+      Var.required "projectId" .projectId Var.string
+    queryRoot =
+      extract
+        (field "project"
+            [ ( "id", Arg.variable projectIDVar ) ]
+            projectWithMembersObject
+        )
+    id = Uuid.toString uuid
+  in
+    queryDocument queryRoot |> request { projectId = id }
+
+
+editProjectQuery : Uuid -> Request Query EditProjectRequest
+editProjectQuery uuid =
+  let
+    projectIDVar =
+      Var.required "projectId" .projectId Var.string
+    queryRoot =
+      object EditProjectRequest
+        |> with (field "project"
+            [ ( "id", Arg.variable projectIDVar ) ]
+            projectWithMembersObject
+          )
+        |> with (field "allUsers" [] (list userObject))
+    id = Uuid.toString uuid
+  in
+    queryDocument queryRoot |> request { projectId = id }
+
 convertToCreateProjectMutation : CreateProjectForm -> CreateProjectMutation
 convertToCreateProjectMutation project =
   CreateProjectMutation project.name project.colour project.company project.abbreviation
@@ -67,11 +119,11 @@ processCreateProjectInput project =
     { input = newProject
     }
 
-convertToUpdateProjectMutation : Project -> UpdateProjectMutation
+convertToUpdateProjectMutation : ProjectWithMembers -> UpdateProjectMutation
 convertToUpdateProjectMutation project =
   UpdateProjectMutation (Uuid.toString project.id) project.name project.colour project.company project.abbreviation
 
-processUpdateProjectInput : Project -> UpdateProjectInput
+processUpdateProjectInput : ProjectWithMembers -> UpdateProjectInput
 processUpdateProjectInput project =
   let
     newProject = convertToUpdateProjectMutation project
@@ -116,7 +168,7 @@ createProjectMutation project =
     mutationDocument mutationRoot
       |> request project
 
-updateProjectMutation : UpdateProjectInput -> Request Mutation Project
+updateProjectMutation : UpdateProjectInput -> Request Mutation ProjectMutationResult
 updateProjectMutation project =
   let
     projectVar =
@@ -135,7 +187,10 @@ updateProjectMutation project =
       extract
         (field "updateProject"
           [ ("input", Arg.variable projectVar) ]
-          (extract (field "project" [] projectsObject))
+          (object ProjectMutationResult
+            |> with (field "project" [] projectsObject)
+            |> with (field "ok" [] bool)
+          )
         )
 
   in

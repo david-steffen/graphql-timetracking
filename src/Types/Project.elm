@@ -1,31 +1,27 @@
-module Types.Project exposing 
-  ( Project
-  , ProjectModel
-  , ProjectsRequest
-  , CreateProjectMutation
-  , CreateProjectInput
-  , CreateProjectForm
-  , UpdateProjectMutation
-  , UpdateProjectInput
-  , ProjectFormAction(..)
-  , DeleteProjectMutation
-  , DeleteProjectInput
-  , ProjectDeleteMutationResult
-  )
+module Types.Project exposing (..)
 
 import Uuid exposing (Uuid)
 import Array exposing (Array)
+import Types.User exposing (User)
 
 type alias ProjectModel =
   { readyProjects : Bool
   , projects : Array Project
   , errResult : Maybe String
-  , createForm : Maybe CreateProjectForm
-  , updateForm : Maybe Project
-  , isPendingProject : Bool
-  , selectedIndex : Maybe Int
-  , formAction : ProjectFormAction
+  , isPending : Bool
   , deleteId : Maybe Uuid
+  }
+
+type alias AddProjectModel =
+  { errResult : Maybe String
+  , createForm : Maybe CreateProjectForm
+  , isPending : Bool
+  }
+
+type alias EditProjectModel =
+  { errResult : Maybe String
+  , updateForm : Maybe ProjectWithMembers
+  , isPending : Bool
   }
 
 type alias Project =
@@ -34,6 +30,24 @@ type alias Project =
   , colour : String
   , company : String
   , abbreviation : String
+  }
+
+type alias ProjectWithMembers =
+  { id : Uuid
+  , name : String
+  , colour : String
+  , company : String
+  , abbreviation : String
+  , members : List ProjectMember
+  }
+
+type alias ProjectMember =
+  { user : User
+  }
+
+type alias EditProjectRequest =
+  { project : ProjectWithMembers
+  , allUsers : List User
   }
 
 type alias ProjectsRequest =
@@ -68,6 +82,11 @@ type alias UpdateProjectMutation =
 type alias UpdateProjectInput =
   { input : UpdateProjectMutation }
 
+type alias ProjectMutationResult =
+  { project : Project
+  , ok : Bool
+  }
+
 type alias ProjectDeleteMutationResult =
   { projectId : Uuid
   ,  ok : Bool
@@ -79,9 +98,3 @@ type alias DeleteProjectMutation =
 
 type alias DeleteProjectInput = 
   { input : DeleteProjectMutation }
-
-type ProjectFormAction
-  = Noop
-  | Create
-  | Update
-  | Delete

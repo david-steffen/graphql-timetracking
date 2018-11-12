@@ -9,18 +9,22 @@ import Url
 import Route exposing (..)
 import Page.Timelogs as Timelogs exposing (..)
 import Page.Projects as Projects exposing (..)
+import Page.Projects.AddProject as AddProject exposing (..)
+import Page.Projects.EditProject as EditProject exposing (..)
+import Page.Users as Users exposing (..)
 import Page.About as About exposing (..)
 import Page.NotFound as NotFound exposing (..)
 import Json.Decode as JD exposing (..)
 import Api exposing (sendQueryRequest)
-import Api.Timelog exposing (mergeWithProjects, timelogsQuery, timelogsWithProjectsQuery)
-import Api.Project exposing (projectsQuery)
+import Api.Timelog exposing (timelogsQuery, timelogsWithProjectsQuery)
+import Api.Project exposing (projectsQuery, projectQuery, editProjectQuery)
 import GraphQL.Client.Http as GraphQLClient
 import Task exposing (Task)
 import Types exposing (Model, Flags)
 import Types.Timelog exposing (TimelogsRequest, TimelogsWithProjectsRequest)
-import Types.Project exposing (ProjectsRequest)
+import Types.Project exposing (Project, ProjectWithMembers, ProjectsRequest, EditProjectRequest)
 import Array exposing (Array)
+import Uuid exposing (Uuid)
 -- MAIN
 
 
@@ -46,6 +50,9 @@ init flags url key =
     , csrf = flags.csrftoken
     , timelogModel = Timelogs.init
     , projectModel = Projects.init
+    , addProjectModel = AddProject.init
+    , editProjectModel = EditProject.init
+    , userModel = Users.init
     , showMenu = False
     }
 
@@ -58,9 +65,14 @@ type Msg
   | UrlChanged Url.Url
   | TimelogMsg Timelogs.Msg
   | ProjectMsg Projects.Msg
-  | ReceiveTimelogResponse (Result GraphQLClient.Error TimelogsRequest)
-  | ReceiveTimelogWithProjectResponse (Result GraphQLClient.Error TimelogsWithProjectsRequest)
-  | ReceiveProjectResponse (Result GraphQLClient.Error ProjectsRequest)
+  | AddProjectMsg AddProject.Msg
+  | EditProjectMsg EditProject.Msg
+  | UserMsg Users.Msg
+  | ReceiveTimelogsResponse (Result GraphQLClient.Error TimelogsRequest)
+  | ReceiveTimelogsWithProjectsResponse (Result GraphQLClient.Error TimelogsWithProjectsRequest)
+  | ReceiveProjectsResponse (Result GraphQLClient.Error ProjectsRequest)
+  | ReceiveProjectResponse (Result GraphQLClient.Error ProjectWithMembers)
+  | ReceiveEditProjectResponse (Result GraphQLClient.Error EditProjectRequest)
   | ToggleMenu 
   -- | NotFoundMsg NotFound.Msg
 
@@ -84,28 +96,32 @@ update msg model =
 
     ProjectMsg projectMsg ->
       stepProject model ( Projects.update projectMsg model )
-    ReceiveTimelogResponse (Err err) ->
+    AddProjectMsg addProjectMsg ->
+      stepAddProject model ( AddProject.update addProjectMsg model )
+    EditProjectMsg editProjectMsg ->
+      stepEditProject model ( EditProject.update editProjectMsg model )
+    UserMsg userMsg ->
+      stepUser model ( Users.update userMsg model )
+    ReceiveTimelogsResponse (Err err) ->
       ( model, Cmd.none ) 
-    ReceiveTimelogResponse (Ok response) ->
+    ReceiveTimelogsResponse (Ok response) ->
       let
-        mergedWithProjects = mergeWithProjects response.allTimelogs (Array.toList model.projectModel.projects)
         timelogModel = model.timelogModel
         newTimelogModel = 
-          { timelogModel | timelogs = Array.fromList mergedWithProjects, readyTimes = True }
+          { timelogModel | timelogs = Array.fromList response.allTimelogs, readyTimes = True }
       in
         ( { model
           | timelogModel = newTimelogModel
           }
         , Cmd.none 
         )
-    ReceiveTimelogWithProjectResponse (Err err) ->
+    ReceiveTimelogsWithProjectsResponse (Err err) ->
       ( model, Cmd.none ) 
-    ReceiveTimelogWithProjectResponse (Ok response) ->
+    ReceiveTimelogsWithProjectsResponse (Ok response) ->
       let
-        mergedWithProjects = mergeWithProjects response.allTimelogs response.allProjects
         timelogModel = model.timelogModel
         newTimelogModel = 
-          { timelogModel | timelogs = Array.fromList mergedWithProjects, readyTimes = True }
+          { timelogModel | timelogs = Array.fromList response.allTimelogs, readyTimes = True }
         projectModel = model.projectModel
         newProjectModel = 
           { projectModel | projects = Array.fromList response.allProjects, readyProjects = True }
@@ -116,9 +132,9 @@ update msg model =
           }
         , Cmd.none 
         )
-    ReceiveProjectResponse (Err err) ->
+    ReceiveProjectsResponse (Err err) ->
       ( model, Cmd.none ) 
-    ReceiveProjectResponse (Ok response) ->
+    ReceiveProjectsResponse (Ok response) ->
       let
         projectModel = model.projectModel
         newProjectModel = 
@@ -126,6 +142,37 @@ update msg model =
       in
         ( { model
           | projectModel = newProjectModel
+          }
+        , Cmd.none 
+        )
+    ReceiveProjectResponse (Err err) ->
+      ( model, Cmd.none ) 
+    ReceiveProjectResponse (Ok response) ->
+      let
+        editProjectModel = model.editProjectModel
+
+        newProjectModel = 
+          { editProjectModel | updateForm = Just response }
+      in
+        ( { model
+          | editProjectModel = newProjectModel
+          }
+        , Cmd.none 
+        )
+    ReceiveEditProjectResponse (Err err) ->
+      ( model, Cmd.none ) 
+    ReceiveEditProjectResponse (Ok response) ->
+      let
+        editProjectModel = model.editProjectModel
+        userModel = model.userModel
+        newProjectModel = 
+          { editProjectModel | updateForm = Just response.project }
+        newUserModel =
+          { userModel | users = response.allUsers}
+      in
+        ( { model
+          | editProjectModel = newProjectModel
+          , userModel = newUserModel
           }
         , Cmd.none 
         )
@@ -148,20 +195,48 @@ stepProject model (projectModel, cmds) =
   , Cmd.map ProjectMsg cmds
   )
 
+stepAddProject : Model -> ( Model, Cmd AddProject.Msg ) -> ( Model, Cmd Msg )
+stepAddProject model (addProjectModel, cmds) =
+  ( addProjectModel
+  , Cmd.map AddProjectMsg cmds
+  )
+
+stepEditProject : Model -> ( Model, Cmd EditProject.Msg ) -> ( Model, Cmd Msg )
+stepEditProject model (editProjectModel, cmds) =
+  ( editProjectModel
+  , Cmd.map EditProjectMsg cmds
+  )
+
+stepUser : Model -> ( Model, Cmd Users.Msg ) -> ( Model, Cmd Msg )
+stepUser model (userModel, cmds) =
+  ( userModel
+  , Cmd.map UserMsg cmds
+  )
+
 sendTimeLogsQuery : String -> Cmd Msg
 sendTimeLogsQuery csrf =
   sendQueryRequest csrf timelogsQuery
-    |> Task.attempt ReceiveTimelogResponse
+    |> Task.attempt ReceiveTimelogsResponse
 
 sendTimeLogsWithProjectsQuery : String -> Cmd Msg
 sendTimeLogsWithProjectsQuery csrf =
   sendQueryRequest csrf timelogsWithProjectsQuery 
-    |> Task.attempt ReceiveTimelogWithProjectResponse
+    |> Task.attempt ReceiveTimelogsWithProjectsResponse
 
 sendProjectsQuery : String -> Cmd Msg
 sendProjectsQuery csrf =
   sendQueryRequest csrf projectsQuery
+    |> Task.attempt ReceiveProjectsResponse
+
+sendProjectQuery : String -> Uuid -> Cmd Msg
+sendProjectQuery csrf uuid =
+  sendQueryRequest csrf (projectQuery  uuid)
     |> Task.attempt ReceiveProjectResponse
+
+sendEditProjectQuery : String -> Uuid -> Cmd Msg
+sendEditProjectQuery csrf uuid =
+  sendQueryRequest csrf (editProjectQuery  uuid)
+    |> Task.attempt ReceiveEditProjectResponse
 
 handleRoute : Model -> ( Model, Cmd Msg )
 handleRoute ({ timelogModel, projectModel, csrf } as model) =
@@ -182,6 +257,10 @@ handleRoute ({ timelogModel, projectModel, csrf } as model) =
           ( model, Cmd.none )
         else
           ( model, sendProjectsQuery csrf )
+      AddProjectR ->
+        ( model, Cmd.none )
+      EditProjectR uuid ->
+        ( model, sendEditProjectQuery csrf uuid )
       _ ->
         ( model, Cmd.none )
 
@@ -240,6 +319,10 @@ viewPage model =
         H.map TimelogMsg (Timelogs.view model)
       ProjectsR ->
         H.map ProjectMsg (Projects.view model)
+      AddProjectR ->
+        H.map AddProjectMsg (AddProject.view model)
+      EditProjectR uuid ->
+        H.map EditProjectMsg (EditProject.view model)
       _ ->
         H.div [] []
 

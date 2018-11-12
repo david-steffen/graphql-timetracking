@@ -6,7 +6,7 @@ import uuid
 
 
 class UserManager(BaseUserManager):
-    def create_user(self, email, name, country, account_type, password=None, **extra_fields):
+    def create_user(self, email, first_name, last_name, name, country, account_type, password=None, **extra_fields):
         if not email:
             raise ValueError('Users must have an email address')
 
@@ -15,13 +15,15 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_superuser', False)
         user = self.model(
             email=self.normalize_email(email),
+            first_name=first_name,
+            last_name=last_name,
             **extra_fields
         )
 
         user.set_password(password)
         user.save(using=self._db)
         if user is not None:
-            account = Account.objects.create(name=name,country=country)
+            account = Account.objects.create(name=name,country=country,type=account_type)
             user.account = account
             user.save()
         return user
@@ -35,7 +37,7 @@ class UserManager(BaseUserManager):
             password=password,
             name="apps",
             country="GB",
-            account_type="CO"
+            account_type="CO",
             **extra_fields
         )
         return user

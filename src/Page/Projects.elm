@@ -11,7 +11,6 @@ import Types.Project exposing
   ( Project
   , ProjectModel
   , CreateProjectForm
-  , ProjectFormAction(..)
   , ProjectDeleteMutationResult
   )
 import Task
@@ -33,30 +32,12 @@ init =
   { readyProjects = False
   , projects = Array.empty
   , errResult = Nothing
-  , createForm = Nothing
-  , updateForm = Nothing
-  , formAction = Noop
-  , isPendingProject = False
-  , selectedIndex = Nothing
+  , isPending = False
   , deleteId = Nothing
   }
 
 type Msg  
-  = CreateProject
-  | SubmitCreateProject
-  | ReceiveCreateProjectMutationResponse (Result GraphQLClient.Error Project)
-  | ReceiveUpdateProjectMutationResponse (Result GraphQLClient.Error Project)
-  | ReceiveDeleteProjectMutationResponse (Result GraphQLClient.Error ProjectDeleteMutationResult)
-  | InputCreateProjectName String
-  | InputCreateProjectAbbreviation String
-  | InputCreateProjectColour String
-  | InputCreateProjectCompany String
-  | EditProject Int Uuid
-  | SubmitEditProject
-  | InputUpdateProjectName String
-  | InputUpdateProjectAbbreviation String
-  | InputUpdateProjectColour String
-  | InputUpdateProjectCompany String
+  = ReceiveDeleteProjectMutationResponse (Result GraphQLClient.Error ProjectDeleteMutationResult)
   | DeleteProject Uuid
   | SubmitDeleteProject
   | CloseFormModal
@@ -64,82 +45,12 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ({ timelogModel, projectModel } as model) =
   case msg of
-    CreateProject ->
-      let
-        newProjectModel = 
-          { projectModel 
-          | formAction = Create
-          }  
-      in
-        ( passToModel newProjectModel model
-        , Cmd.none
-        )
-    SubmitCreateProject ->
-      let
-        newProjectModel = 
-          { projectModel 
-          | isPendingProject = True
-          }  
-      in
-        ( passToModel newProjectModel model
-        , sendCreateProjectMutation model
-        )
-    ReceiveCreateProjectMutationResponse (Err err) ->
-      let
-        newProjectModel = 
-          { projectModel 
-          | isPendingProject = False
-          }  
-      in
-        ( passToModel newProjectModel model
-        , Cmd.none
-        )
-    ReceiveCreateProjectMutationResponse (Ok response) ->
-      let
-        projects = Array.push response projectModel.projects
-        newProjectModel = 
-          { projectModel 
-          | projects = projects
-          , createForm = Nothing
-          , formAction = Noop
-          , isPendingProject = False
-          }
-      in
-        ( passToModel newProjectModel model
-        , Cmd.none
-        )
-    ReceiveUpdateProjectMutationResponse (Err err) ->
-      let
-        newProjectModel = 
-          { projectModel 
-          | isPendingProject = False
-          }  
-      in
-        ( passToModel newProjectModel model
-        , Cmd.none
-        )
-    ReceiveUpdateProjectMutationResponse (Ok response) ->
-      let
-        index = projectModel.selectedIndex |> Maybe.withDefault 0
-        projects = Array.set index response projectModel.projects
-        newProjectModel = 
-          { projectModel 
-          | projects = projects
-          , updateForm = Nothing
-          , formAction = Noop
-          , isPendingProject = False
-          }
-      in
-        ( passToModel newProjectModel model
-        , Cmd.none
-        )
     ReceiveDeleteProjectMutationResponse (Err err) ->
       let
         newProjectModel = 
           { projectModel 
-          | isPendingProject = False
+          | isPending = False
           , deleteId = Nothing
-          , formAction = Noop
           }  
       in
         ( passToModel newProjectModel model
@@ -152,9 +63,8 @@ update msg ({ timelogModel, projectModel } as model) =
         newProjectModel = 
           { projectModel 
           | projects = projects
-          , isPendingProject = False
+          , isPending = False
           , deleteId = Nothing
-          , formAction = Noop
           }
         newTimelogModel = 
           { timelogModel
@@ -164,212 +74,34 @@ update msg ({ timelogModel, projectModel } as model) =
         ( { model | projectModel = newProjectModel, timelogModel = newTimelogModel}
         , Cmd.none
         )
-    InputCreateProjectName string ->
-      let
-        project = hasProjectForm projectModel.createForm
-        newProject =
-          { project
-          | name = string
-          }
-      in
-        ( passToModel 
-          { projectModel 
-          | createForm = Just newProject
-          }
-          model
-        , Cmd.none
-        )
-    InputCreateProjectAbbreviation string ->
-      let
-        project = hasProjectForm projectModel.createForm
-        newProject =
-          { project
-          | abbreviation = string
-          }
-      in
-        ( passToModel 
-          { projectModel 
-          | createForm = Just newProject
-          }
-          model
-        , Cmd.none
-        )
-    InputCreateProjectColour string ->
-      let
-        project = hasProjectForm projectModel.createForm
-        newProject =
-          { project
-          | colour = string
-          }
-      in
-        ( passToModel 
-          { projectModel 
-          | createForm = Just newProject
-          }
-          model
-        , Cmd.none
-        )
-    InputCreateProjectCompany string ->
-      let
-        project = hasProjectForm projectModel.createForm
-        newProject =
-          { project
-          | company = string
-          }
-      in
-        ( passToModel 
-          { projectModel 
-          | createForm = Just newProject
-          }
-          model
-        , Cmd.none
-        )
-    EditProject index id ->
-      let
-        newProjectModel = 
-          { projectModel 
-          | updateForm = Array.get index projectModel.projects
-          , formAction = Update
-          , selectedIndex = Just index
-          }  
-      in
-        ( passToModel newProjectModel model
-        , Cmd.none
-        )
-    SubmitEditProject ->
-      let
-        newProjectModel = 
-          { projectModel 
-          | isPendingProject = True
-          }  
-      in
-        ( passToModel newProjectModel model
-        , sendUpdateProjectMutation model
-        )
-    InputUpdateProjectName string ->
-      case projectModel.updateForm of 
-        Just updateForm ->
-          let
-            newProject =
-              { updateForm
-              | name = string
-              }
-          in
-            ( passToModel 
-              { projectModel 
-              | updateForm = Just newProject
-              }
-              model
-            , Cmd.none
-            )
-        Nothing ->
-          ( model, Cmd.none )
-    InputUpdateProjectAbbreviation string ->
-      case projectModel.updateForm of 
-        Just updateForm ->
-          let
-            newProject =
-              { updateForm
-              | abbreviation = string
-              }
-          in
-            ( passToModel 
-              { projectModel 
-              | updateForm = Just newProject
-              }
-              model
-            , Cmd.none
-            )
-        Nothing ->
-          ( model, Cmd.none )
-    InputUpdateProjectColour string ->
-      case projectModel.updateForm of 
-        Just updateForm ->
-          let
-            newProject =
-              { updateForm
-              | colour = string
-              }
-          in
-            ( passToModel 
-              { projectModel 
-              | updateForm = Just newProject
-              }
-              model
-            , Cmd.none
-            )
-        Nothing ->
-          ( model, Cmd.none )
-    InputUpdateProjectCompany string ->
-      case projectModel.updateForm of 
-        Just updateForm ->
-          let
-            newProject =
-              { updateForm
-              | company = string
-              }
-          in
-            ( passToModel 
-              { projectModel 
-              | updateForm = Just newProject
-              }
-              model
-            , Cmd.none
-            )
-        Nothing ->
-          ( model, Cmd.none )
     DeleteProject id ->
       ( passToModel 
         { projectModel 
         | deleteId = Just id
-        , formAction = Delete
         }
         model
       , Cmd.none
       )
     SubmitDeleteProject ->
-      ( model, sendDeleteProjectMutation model )
+      ( passToModel 
+        { projectModel 
+        | isPending = True
+        }
+        model
+      , sendDeleteProjectMutation model
+      )
     CloseFormModal ->
       ( passToModel 
         { projectModel 
-        | formAction = Noop 
-        , updateForm = Nothing
-        , createForm = Nothing
-        , deleteId = Nothing
+        | deleteId = Nothing
         }
         model
       , Cmd.none
       )
 
-hasProjectForm : Maybe CreateProjectForm -> CreateProjectForm
-hasProjectForm project =
-  case project of 
-    Just value ->
-      value
-    Nothing ->
-      CreateProjectForm "" "" "" ""
-
 passToModel : ProjectModel -> Model -> Model
 passToModel projectModel model =
   { model | projectModel = projectModel }
-
-sendCreateProjectMutation : Model -> Cmd Msg
-sendCreateProjectMutation  ({projectModel} as model) =
-  case projectModel.createForm of 
-    Just createForm ->
-      sendMutationRequest model.csrf (createProjectMutation <| processCreateProjectInput createForm)
-        |> Task.attempt ReceiveCreateProjectMutationResponse
-    Nothing ->
-      Cmd.none
-
-sendUpdateProjectMutation : Model -> Cmd Msg
-sendUpdateProjectMutation  ({projectModel} as model) =
-  case projectModel.updateForm of 
-    Just updateForm ->
-      sendMutationRequest model.csrf (updateProjectMutation <| processUpdateProjectInput updateForm)
-        |> Task.attempt ReceiveUpdateProjectMutationResponse
-    Nothing ->
-      Cmd.none
 
 sendDeleteProjectMutation : Model -> Cmd Msg
 sendDeleteProjectMutation ({projectModel} as model) =
@@ -396,9 +128,9 @@ view model =
         ]
       , H.div
         [ A.class "level-right" ]
-        [ H.button
+        [ H.a
           [ A.class "button is-success" 
-          , E.onClick CreateProject
+          , A.href "/projects/add"
           ]
           [ H.span
             [ A.class "icon is-small" ]
@@ -452,98 +184,7 @@ projectView index project =
 
 projectForm : Model -> Html Msg
 projectForm ( {projectModel} as model) = 
-  case projectModel.formAction of 
-    Noop ->
-      H.div [] []
-    Create ->
-      createProjectForm model
-    Update ->
-      case projectModel.updateForm of
-        Just form ->
-          updateProjectForm form projectModel.isPendingProject
-        Nothing ->
-          createProjectForm model
-    Delete ->
-      deleteProjectForm model
-
-createProjectForm : Model -> Html Msg
-createProjectForm ({projectModel} as model) =
-  let
-    button = 
-      case projectModel.isPendingProject of
-        True ->
-          H.button
-            [ A.class "button is-primary is-loading"
-            , A.attribute "disabled" "disabled"
-            ]
-            [ H.text "Submit" ]
-        False ->
-          H.button
-            [ A.class "button is-primary"
-            , E.onClick SubmitCreateProject
-            ]
-            [ H.text "Submit" ]
-  in
-    H.div 
-      []
-      [ H.h3
-        [ A.class "title" ]
-        [ H.text "Add" ]
-      , formInput "text" "Name" InputCreateProjectName Nothing Full
-      , formInput "text" "Company" InputCreateProjectCompany Nothing Full
-      , formInput "text" "Abbreviation" InputCreateProjectAbbreviation Nothing Full
-      , formInput "color" "Colour" InputCreateProjectColour Nothing Short
-      , H.div [ A.class "field" ]
-        [ H.div [ A.class "control" ]
-          [ button
-          , H.button
-            [ A.class "button is-text"
-            , E.onClick CloseFormModal
-            ]
-            [ H.text "Cancel" ]
-          ]
-        ]
-      ]
-
-updateProjectForm : Project -> Bool -> Html Msg
-updateProjectForm form isPending =
-  let
-    button = 
-      case isPending of
-        True ->
-          H.button
-            [ A.class "button is-primary is-loading"
-            , A.attribute "disabled" "disabled"
-            ]
-            [ H.text "Submit" ]
-        False ->
-          H.button
-            [ A.class "button is-primary"
-            , E.onClick SubmitEditProject
-            ]
-            [ H.text "Submit" ]
-  in
-    H.div 
-      []
-      [ H.h3
-        [ A.class "title" ]
-        [ H.text "Update" ]
-      , formInput "text" "Name" InputUpdateProjectName (Just form.name) Full
-      , formInput "text" "Company" InputUpdateProjectCompany (Just form.company) Full
-      , formInput "text" "Abbreviation" InputUpdateProjectAbbreviation (Just form.abbreviation) Full
-      , formInput "color" "Colour" InputUpdateProjectColour (Just form.colour) Short
-      , H.div [ A.class "field" ]
-        [ H.div [ A.class "control" ]
-          [ button
-          , H.button
-            [ A.class "button is-text"
-            , E.onClick CloseFormModal
-            ]
-            [ H.text "Cancel" ]
-          ]
-        ]
-      ]
-
+  deleteProjectForm model
 
 projectList : Model -> Html Msg
 projectList model =
@@ -555,11 +196,12 @@ actions : Int -> Uuid -> Html Msg
 actions index id =
   H.div
     []
-    [ H.span
-      [ A.class "icon" ]
+    [ H.a
+      [ A.class "icon"
+      , A.href <| "/projects/edit/" ++ (Uuid.toString id)
+      ]
       [ H.span
         [ A.class "fas fa-pen"
-        , E.onClick <| EditProject index id
         ]
         []
       ]
@@ -574,11 +216,11 @@ formModal : Model -> Html Msg
 formModal model =
   let
     showModal =
-      case model.projectModel.formAction of 
-        Noop ->
-          False
-        _ ->
+      case model.projectModel.deleteId of 
+        Just val ->
           True
+        Nothing ->
+          False
   in
     H.div 
       [ A.classList [("modal", True), ("is-active", showModal) ] ]
@@ -603,7 +245,7 @@ deleteProjectForm : Model -> Html Msg
 deleteProjectForm ( {projectModel} as model) =
   let
     button = 
-      case projectModel.isPendingProject of
+      case projectModel.isPending of
         True ->
           H.button
             [ A.class "button is-primary is-loading"

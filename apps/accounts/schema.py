@@ -12,14 +12,10 @@ class UserNode(ObjectType):
     @classmethod
     def get_node(cls, id, context, info):
         try:
-            user = cls._meta.model.objects.get(id=id)
+            return cls._meta.model.objects.filter(account=context.user.account)
         except cls._meta.model.DoesNotExist:
             return None
 
-        if context.user.is_staff or context.user == user:
-            return user
-
-        return None
 
 class AccountNode(DjangoObjectType):
     class Meta:
@@ -27,15 +23,15 @@ class AccountNode(DjangoObjectType):
 
     @classmethod
     def get_node(cls, id, context, info):
-        try:
-            account = cls._meta.model.objects.get(id=id)
-        except cls._meta.model.DoesNotExist:
+        if not context.user.is_authenticated:
             return None
-        user = account.user_set.filter(id=context.user.id)
-        if context.user.is_staff or context.user == user:
-            return user
+        else:
+            try:
+                account = cls._meta.model.objects.filter(user=context.user)
+            except cls._meta.model.DoesNotExist:
+                return None
 
-        return None
+        
 
 
 class Query(object):
@@ -46,10 +42,10 @@ class Query(object):
     all_accounts = graphene.List(AccountNode)
 
     def resolve_all_users(self, info, **kwargs):
-        if info.context.user.is_staff:
-            return User.objects.all()
-
-        return None
+        if info.context.user.is_authenticated:
+            return User.objects.filter(account=info.context.user.account)
+        else:
+            return None
 
     def resolve_user(self, info, **kwargs):
         id = kwargs.get('id')
