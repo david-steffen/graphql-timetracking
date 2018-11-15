@@ -16,12 +16,15 @@ type alias AddProjectModel =
   { errResult : Maybe String
   , createForm : Maybe CreateProjectForm
   , isPending : Bool
+  , addMembers : List User
   }
 
 type alias EditProjectModel =
   { errResult : Maybe String
   , updateForm : Maybe ProjectWithMembers
   , isPending : Bool
+  , addMembers : List User
+  , removeMembers : List User
   }
 
 type alias Project =
@@ -38,11 +41,12 @@ type alias ProjectWithMembers =
   , colour : String
   , company : String
   , abbreviation : String
-  , members : List ProjectMember
+  , members : List User
   }
 
 type alias ProjectMember =
-  { user : User
+  { id : Uuid 
+  , user : User
   }
 
 type alias EditProjectRequest =
@@ -59,6 +63,7 @@ type alias CreateProjectMutation =
   , colour : String
   , company : String
   , abbreviation : String
+  , addMembers : List String
   }
 
 type alias CreateProjectInput =
@@ -77,6 +82,8 @@ type alias UpdateProjectMutation =
   , colour : String
   , company : String
   , abbreviation : String
+  , addMembers : List String
+  , removeMembers : List String
   }
 
 type alias UpdateProjectInput =

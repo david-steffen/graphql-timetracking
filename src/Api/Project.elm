@@ -16,6 +16,7 @@ import Types.Project exposing
   , ProjectWithMembers
   , EditProjectRequest
   )
+import Types.User exposing ( User )
 import Api exposing (..)
 import Api.User exposing (userObject)
 import GraphQL.Request.Builder exposing 
@@ -44,26 +45,27 @@ import Uuid exposing (Uuid)
 projectsMembersObject : ValueSpec NonNull  ObjectType (ProjectMember) vars
 projectsMembersObject =
   object ProjectMember
-      |> with (field "user" [] userObject)
+    |> with (field "id" [] uuid)
+    |> with (field "user" [] userObject)
 
 projectWithMembersObject : ValueSpec NonNull  ObjectType (ProjectWithMembers) vars
 projectWithMembersObject =
   object ProjectWithMembers
-      |> with (field "id" [] uuid)
-      |> with (field "name" [] string)
-      |> with (field "colour" [] string)
-      |> with (field "company" [] string)
-      |> with (field "abbreviation" [] string)
-      |> with (field "members" [] (list projectsMembersObject))
+    |> with (field "id" [] uuid)
+    |> with (field "name" [] string)
+    |> with (field "colour" [] string)
+    |> with (field "company" [] string)
+    |> with (field "abbreviation" [] string)
+    |> with (field "members" [] (list userObject))
 
 projectsObject : ValueSpec NonNull  ObjectType (Project) vars
 projectsObject =
   object Project
-      |> with (field "id" [] uuid)
-      |> with (field "name" [] string)
-      |> with (field "colour" [] string)
-      |> with (field "company" [] string)
-      |> with (field "abbreviation" [] string)
+    |> with (field "id" [] uuid)
+    |> with (field "name" [] string)
+    |> with (field "colour" [] string)
+    |> with (field "company" [] string)
+    |> with (field "abbreviation" [] string)
 
 projectsQuery : Request Query ProjectsRequest
 projectsQuery =
@@ -106,27 +108,49 @@ editProjectQuery uuid =
   in
     queryDocument queryRoot |> request { projectId = id }
 
-convertToCreateProjectMutation : CreateProjectForm -> CreateProjectMutation
-convertToCreateProjectMutation project =
-  CreateProjectMutation project.name project.colour project.company project.abbreviation
-
-
-processCreateProjectInput : CreateProjectForm -> CreateProjectInput
-processCreateProjectInput project =
+convertToCreateProjectMutation : CreateProjectForm -> List User -> CreateProjectMutation
+convertToCreateProjectMutation project addMembers =
   let
-    newProject = convertToCreateProjectMutation project
+    addMembersStrings = List.map (\x -> Uuid.toString x.id) addMembers
+  in
+    CreateProjectMutation project.name project.colour project.company project.abbreviation addMembersStrings
+
+
+processCreateProjectInput : CreateProjectForm -> List User -> CreateProjectInput
+processCreateProjectInput project addMembers =
+  let
+    newProject = convertToCreateProjectMutation project addMembers
   in
     { input = newProject
     }
 
-convertToUpdateProjectMutation : ProjectWithMembers -> UpdateProjectMutation
-convertToUpdateProjectMutation project =
-  UpdateProjectMutation (Uuid.toString project.id) project.name project.colour project.company project.abbreviation
-
-processUpdateProjectInput : ProjectWithMembers -> UpdateProjectInput
-processUpdateProjectInput project =
+convertToUpdateProjectMutation : 
+  ProjectWithMembers
+  -> List User 
+  -> List User 
+  -> UpdateProjectMutation
+convertToUpdateProjectMutation project addMembers removeMembers=
   let
-    newProject = convertToUpdateProjectMutation project
+    addMembersStrings = List.map (\x -> Uuid.toString x.id) addMembers
+    removeMembersStrings = List.map (\x -> Uuid.toString x.id) removeMembers
+  in
+    UpdateProjectMutation 
+      (Uuid.toString project.id) 
+      project.name 
+      project.colour 
+      project.company 
+      project.abbreviation
+      addMembersStrings
+      removeMembersStrings
+
+processUpdateProjectInput : 
+  ProjectWithMembers 
+  -> List User 
+  -> List User 
+  -> UpdateProjectInput
+processUpdateProjectInput project addMembers removeMembers =
+  let
+    newProject = convertToUpdateProjectMutation project addMembers removeMembers
   in
     { input = newProject
     }
@@ -154,6 +178,7 @@ createProjectMutation project =
             , Var.field "colour" .colour Var.string
             , Var.field "company" .company Var.string
             , Var.field "abbreviation" .abbreviation Var.string
+            , Var.field "add_members" .addMembers (Var.list Var.string)
             ]
         )
 
@@ -180,6 +205,8 @@ updateProjectMutation project =
             , Var.field "colour" .colour Var.string
             , Var.field "company" .company Var.string
             , Var.field "abbreviation" .abbreviation Var.string
+            , Var.field "add_members" .addMembers (Var.list Var.string)
+            , Var.field "remove_members" .removeMembers (Var.list Var.string)
             ]
         )
 

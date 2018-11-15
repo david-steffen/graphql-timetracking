@@ -6,9 +6,12 @@ from django.conf import settings
 class ProjectMember(BaseModel):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.DO_NOTHING)
     project = models.ForeignKey("projects.Project", on_delete=models.CASCADE)
-    owner = models.BooleanField()
-    account = models.ForeignKey("accounts.Account", on_delete=models.DO_NOTHING)
 
+    class Meta:
+        ordering = ('created',)
+
+    def __str__(self):
+        return '{} - {}, {}'.format(self.project.name, self.user.last_name, self.user.first_name) 
 
 class Project(BaseModel):
     colour = models.CharField(max_length=7)

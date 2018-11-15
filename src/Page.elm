@@ -1,4 +1,4 @@
-module Page exposing (InputLength(..), formInput, formSelect)
+module Page exposing (InputLength(..), formInput, formSelect, fullNameString)
 
 import Html as H exposing (..)
 import Html.Attributes as A exposing (..)
@@ -6,6 +6,7 @@ import Html.Events as E exposing (..)
 import Json.Decode as JD
 import Uuid exposing (Uuid)
 import Types exposing (Model)
+import Types.User exposing (User)
 
 type alias SelectOption =
   { value : String
@@ -94,3 +95,7 @@ formInput type_ placeholder msg value inputLength =
           ]
         ]
       ]
+
+fullNameString : User -> String
+fullNameString user =
+  user.first_name ++ " " ++ user.last_name

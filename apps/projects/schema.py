@@ -4,16 +4,8 @@ import graphene
 from graphene_django.types import DjangoObjectType, ObjectType
 
 
-class MemberNode(ObjectType):
-    id = graphene.UUID()
-    user = graphene.Field(UserNode)
-
-    def resolve_user(self, info, **kwargs):
-        return self
-
-
 class ProjectNode(DjangoObjectType):
-    members = graphene.List(MemberNode)
+    members = graphene.List(UserNode)
 
     class Meta:
         model = Project
@@ -69,7 +61,7 @@ class ProjectInput(graphene.InputObjectType):
     name = graphene.String(required=True)
     company = graphene.String()
     status = graphene.Boolean()
-    members = graphene.List(graphene.String)
+    add_members = graphene.List(graphene.String, name='add_members')
 
 
 class CreateProject(graphene.Mutation):
@@ -92,16 +84,19 @@ class CreateProject(graphene.Mutation):
         project.save()
         project.refresh_from_db()
         if project is not None:
-            ProjectMember.objects.create(
-                account=info.context.user.account,
-                project=project,
-                user=info.context.user,
-                owner=True)
+            add_members = input.get('add_members')
+            if len(add_members):
+                members = map(
+                    lambda x: 
+                        ProjectMember(user_id=x, project=project)
+                    , add_members)
+                ProjectMember.objects.bulk_create(members)
         return CreateProject(project=project)
 
 
 class UpdateProjectInput(ProjectInput):
     id = graphene.String(required=True)
+    remove_members = graphene.List(graphene.String, name='remove_members')
 
 
 class UpdateProject(graphene.Mutation):
@@ -122,6 +117,17 @@ class UpdateProject(graphene.Mutation):
             project.company = input.get('company', '')
             project.status = input.get('status', False)
             project.save()
+            remove_members = input.get('remove_members')
+            add_members = input.get('add_members')
+            if len(remove_members):
+                ProjectMember.objects.filter(project=project, user_id__in=remove_members).delete()
+            if len(add_members):
+                members = map(
+                    lambda x: 
+                        ProjectMember(user_id=x, project=project)
+                    , add_members)
+                ProjectMember.objects.bulk_create(members)
+
             ok = True
 
         return UpdateProject(project=project, ok=ok)
@@ -141,7 +147,7 @@ class DeleteProject(graphene.Mutation):
     @staticmethod
     def mutate(self, info, input=None):
         projectId = input.get('id')
-        project = Project.objects.filter(members=info.context.user).get(pk=projectId)
+        project = Project.objects.filter(account=info.context.user.account).get(pk=projectId)
         ok = False
         if project is not None:
             project.delete()

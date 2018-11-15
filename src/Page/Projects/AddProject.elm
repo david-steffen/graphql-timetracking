@@ -4,8 +4,8 @@ import Html as H exposing (..)
 import Html.Attributes as A exposing (..)
 import Html.Events as E exposing (..)
 import Uuid exposing (Uuid)
-import Types exposing (Model)
 import GraphQL.Client.Http as GraphQLClient
+import Types exposing (Model)
 import Types.Project exposing 
   ( Project
   , ProjectModel
@@ -13,8 +13,9 @@ import Types.Project exposing
   , ProjectDeleteMutationResult
   , AddProjectModel
   )
+import Types.User exposing (User)
 import Task
-import Page exposing (InputLength(..), formInput, formSelect)
+import Page exposing (InputLength(..), formInput, formSelect, fullNameString)
 import Api exposing (sendMutationRequest)
 import Api.Project exposing 
   ( createProjectMutation
@@ -29,6 +30,7 @@ init =
   { errResult = Nothing
   , createForm = Nothing
   , isPending = False
+  , addMembers = []
   }
 
 type Msg  
@@ -39,6 +41,8 @@ type Msg
   | InputCreateProjectColour String
   | InputCreateProjectCompany String
   | CancelAdd
+  | AddMembers User
+  | RemoveMembers User
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -71,6 +75,7 @@ update msg ({ addProjectModel, projectModel } as model) =
           { addProjectModel 
           | createForm = Nothing
           , isPending = False
+          , addMembers = []
           }
         newProjectModel =
           { projectModel 
@@ -154,6 +159,28 @@ update msg ({ addProjectModel, projectModel } as model) =
           | addProjectModel = newAddProjectModel 
           }
         , Nav.pushUrl model.key "/projects" )
+    AddMembers user ->
+      let
+        newAddProjectModel = 
+          { addProjectModel
+          | addMembers = user :: addProjectModel.addMembers
+          }
+      in
+        ( { model 
+          | addProjectModel = newAddProjectModel 
+          }
+        , Cmd.none)
+    RemoveMembers user ->
+      let
+        newAddProjectModel = 
+          { addProjectModel
+          | addMembers = List.filter (\x -> x /= user) addProjectModel.addMembers
+          }
+      in
+        ( { model 
+          | addProjectModel = newAddProjectModel 
+          }
+        , Cmd.none)
 
 hasProjectForm : Maybe CreateProjectForm -> CreateProjectForm
 hasProjectForm project =
@@ -171,7 +198,7 @@ sendCreateProjectMutation : Model -> Cmd Msg
 sendCreateProjectMutation  ({addProjectModel} as model) =
   case addProjectModel.createForm of 
     Just createForm ->
-      sendMutationRequest model.csrf (createProjectMutation <| processCreateProjectInput createForm)
+      sendMutationRequest model.csrf (createProjectMutation <| processCreateProjectInput createForm addProjectModel.addMembers)
         |> Task.attempt ReceiveCreateProjectMutationResponse
     Nothing ->
       Cmd.none
@@ -220,6 +247,7 @@ createProjectForm ({addProjectModel} as model) =
       , formInput "text" "Company" InputCreateProjectCompany Nothing Full
       , formInput "text" "Abbreviation" InputCreateProjectAbbreviation Nothing Full
       , formInput "color" "Colour" InputCreateProjectColour Nothing Short
+      , membersSelect model
       , H.div [ A.class "field" ]
         [ H.div [ A.class "control" ]
           [ button
@@ -229,5 +257,55 @@ createProjectForm ({addProjectModel} as model) =
             ]
             [ H.text "Cancel" ]
           ]
+        ]
+      ]
+
+membersSelect : Model -> Html Msg
+membersSelect ({addProjectModel, userModel} as model) = 
+  let
+    members = addProjectModel.addMembers
+    availableUsers = 
+      List.filter (\user ->
+        not (List.member user members)
+      ) userModel.users
+  in
+    H.div
+      []
+      [ H.div
+        []
+        [ H.h4
+          [ A.class "title is-4" ]
+          [ H.text "Assigned" ]
+        , H.div
+          []
+          ( List.map 
+            (\user -> 
+              H.div 
+                [ E.onClick <| RemoveMembers user ] 
+                [ H.text <| fullNameString user ]
+            ) 
+            members
+          )
+        ]
+      , H.div 
+        []
+        [ H.h4
+          [ A.class "title is-4" ]
+          [ H.text "Available" ]
+        , if List.isEmpty availableUsers then
+            H.p 
+              [ A.class "subtitle has-text-centered" ] 
+              [ H.text "No users to add" ]
+          else
+            H.div
+              []
+              ( List.map 
+                (\user -> 
+                  H.div 
+                    [ E.onClick <| AddMembers user ] 
+                    [ H.text <| fullNameString user ]
+                ) 
+                availableUsers
+              )
         ]
       ]

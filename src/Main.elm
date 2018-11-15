@@ -18,11 +18,13 @@ import Json.Decode as JD exposing (..)
 import Api exposing (sendQueryRequest)
 import Api.Timelog exposing (timelogsQuery, timelogsWithProjectsQuery)
 import Api.Project exposing (projectsQuery, projectQuery, editProjectQuery)
+import Api.User exposing (usersQuery)
 import GraphQL.Client.Http as GraphQLClient
 import Task exposing (Task)
 import Types exposing (Model, Flags)
 import Types.Timelog exposing (TimelogsRequest, TimelogsWithProjectsRequest)
 import Types.Project exposing (Project, ProjectWithMembers, ProjectsRequest, EditProjectRequest)
+import Types.User exposing (User, UsersRequest)
 import Array exposing (Array)
 import Uuid exposing (Uuid)
 -- MAIN
@@ -73,7 +75,9 @@ type Msg
   | ReceiveProjectsResponse (Result GraphQLClient.Error ProjectsRequest)
   | ReceiveProjectResponse (Result GraphQLClient.Error ProjectWithMembers)
   | ReceiveEditProjectResponse (Result GraphQLClient.Error EditProjectRequest)
-  | ToggleMenu 
+  | ReceiveUsersResponse (Result GraphQLClient.Error UsersRequest)
+  | ToggleMenu
+  | Logout
   -- | NotFoundMsg NotFound.Msg
 
 
@@ -176,12 +180,27 @@ update msg model =
           }
         , Cmd.none 
         )
+    ReceiveUsersResponse (Err err) ->
+      ( model, Cmd.none ) 
+    ReceiveUsersResponse (Ok response) ->
+      let
+        userModel = model.userModel
+        newUserModel =
+          { userModel | users = response.allUsers}
+      in
+        ( { model
+          | userModel = newUserModel
+          }
+        , Cmd.none 
+        )
     ToggleMenu ->
       ( { model
         | showMenu = not model.showMenu
         }
       , Cmd.none
       )
+    Logout ->
+      ( model, Nav.load "/accounts/logout/" )
 
 stepTimelog : Model -> ( Model, Cmd Timelogs.Msg ) -> ( Model, Cmd Msg )
 stepTimelog model (timelogModel, cmds) =
@@ -230,12 +249,17 @@ sendProjectsQuery csrf =
 
 sendProjectQuery : String -> Uuid -> Cmd Msg
 sendProjectQuery csrf uuid =
-  sendQueryRequest csrf (projectQuery  uuid)
+  sendQueryRequest csrf (projectQuery uuid)
     |> Task.attempt ReceiveProjectResponse
+
+sendUsersQuery : String -> Cmd Msg
+sendUsersQuery csrf =
+  sendQueryRequest csrf usersQuery
+    |> Task.attempt ReceiveUsersResponse
 
 sendEditProjectQuery : String -> Uuid -> Cmd Msg
 sendEditProjectQuery csrf uuid =
-  sendQueryRequest csrf (editProjectQuery  uuid)
+  sendQueryRequest csrf (editProjectQuery uuid)
     |> Task.attempt ReceiveEditProjectResponse
 
 handleRoute : Model -> ( Model, Cmd Msg )
@@ -258,7 +282,7 @@ handleRoute ({ timelogModel, projectModel, csrf } as model) =
         else
           ( model, sendProjectsQuery csrf )
       AddProjectR ->
-        ( model, Cmd.none )
+        ( model, sendUsersQuery csrf )
       EditProjectR uuid ->
         ( model, sendEditProjectQuery csrf uuid )
       _ ->
@@ -351,9 +375,33 @@ nav model =
         [ H.ul [ A.class "navbar-start" ]
           [ link "/" "Times" route TimelogsR
           , link "/projects" "Projects" route ProjectsR
+          , H.li 
+            [ E.onClick Logout ]
+            [ H.p
+              []
+              [ H.text "Logout" ]
+            ]
           ]
         ]
       ]
+
+link: String -> String -> Route -> Route -> Html Msg
+link href title_ currentRoute route =
+  let
+    classString = 
+      if currentRoute == route then 
+        "selected"
+      else 
+        ""
+  in
+    H.li 
+      []
+      [ H.a
+        [ A.href href 
+        , A.class classString
+        ]
+        [ H.text title_]
+      ] 
 
 navbarBrand : Bool -> List (Html Msg)
 navbarBrand showMenu =
@@ -388,24 +436,6 @@ navbarBrand showMenu =
       []
     ]
   ]
-
-link: String -> String -> Route -> Route -> Html Msg
-link href title_ currentRoute route =
-  let
-    classString = 
-      if currentRoute == route then 
-        "selected"
-      else 
-        ""
-  in
-    H.li 
-      []
-      [ H.a
-        [ A.href href 
-        , A.class classString
-        ]
-        [ H.text title_]
-      ] 
  
 alwaysPreventDefault : msg -> ( msg, Bool )
 alwaysPreventDefault msg =

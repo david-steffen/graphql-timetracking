@@ -4,16 +4,17 @@ import Html as H exposing (..)
 import Html.Attributes as A exposing (..)
 import Html.Events as E exposing (..)
 import Uuid exposing (Uuid)
-import Types exposing (Model)
 import GraphQL.Client.Http as GraphQLClient
+import Types exposing (Model)
 import Types.Project exposing 
   ( Project
   , ProjectWithMembers
   , EditProjectModel
   , ProjectMutationResult
   )
+import Types.User exposing (User)
 import Task
-import Page exposing (InputLength(..), formInput, formSelect)
+import Page exposing (InputLength(..), formInput, formSelect, fullNameString)
 import Api exposing (sendMutationRequest)
 import Api.Project exposing 
   ( updateProjectMutation
@@ -27,6 +28,8 @@ init =
   { errResult = Nothing
   , updateForm = Nothing
   , isPending = False
+  , addMembers = []
+  , removeMembers = []
   }
 
 type Msg  
@@ -37,6 +40,8 @@ type Msg
   | InputUpdateProjectColour String
   | InputUpdateProjectCompany String
   | CancelEdit
+  | AddMembers User
+  | RemoveMembers User
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -76,6 +81,8 @@ update msg ({ projectModel, editProjectModel } as model) =
           { editProjectModel
           | updateForm = Nothing
           , isPending = False
+          , addMembers = []
+          , removeMembers = []
           }
       in
         ( { model 
@@ -171,12 +178,61 @@ update msg ({ projectModel, editProjectModel } as model) =
         newEditProjectModel = 
           { editProjectModel
           | updateForm = Nothing
+          , addMembers = []
+          , removeMembers = []
           }
       in
         ( { model 
           | editProjectModel = newEditProjectModel 
           }
         , redirectToProjectsPage model)
+    AddMembers user ->
+      let
+        newEditProjectModel = 
+          if List.member user editProjectModel.removeMembers then
+            let
+              newRemoveMembers =
+                List.filter (\usr ->
+                  user /= usr
+                  ) editProjectModel.removeMembers
+            in
+              { editProjectModel
+              | removeMembers = newRemoveMembers 
+              }
+          else
+            let
+              newAddMembers = 
+                user :: editProjectModel.addMembers
+            in
+              { editProjectModel
+              | addMembers = newAddMembers 
+              }
+      in
+        ( { model 
+          | editProjectModel = newEditProjectModel 
+          }
+        , Cmd.none)
+    RemoveMembers user ->
+      let
+        newEditProjectModel =
+          if List.member user editProjectModel.addMembers then
+            let 
+              newAddMembers = List.filter (\usr ->
+                user /= usr
+                ) editProjectModel.addMembers
+            in
+              { editProjectModel
+              | addMembers = newAddMembers 
+              }
+          else
+            { editProjectModel
+            | removeMembers = user :: editProjectModel.removeMembers
+            }
+      in
+        ( { model 
+          | editProjectModel = newEditProjectModel 
+          }
+        , Cmd.none)
 
 redirectToProjectsPage : Model -> Cmd Msg
 redirectToProjectsPage model =
@@ -192,7 +248,10 @@ sendUpdateProjectMutation : Model -> Cmd Msg
 sendUpdateProjectMutation  ({editProjectModel} as model) =
   case editProjectModel.updateForm of 
     Just updateForm ->
-      sendMutationRequest model.csrf (updateProjectMutation <| processUpdateProjectInput updateForm)
+      sendMutationRequest model.csrf 
+        ( updateProjectMutation 
+          <| processUpdateProjectInput updateForm editProjectModel.addMembers editProjectModel.removeMembers
+        )
         |> Task.attempt ReceiveUpdateProjectMutationResponse
     Nothing ->
       Cmd.none
@@ -216,14 +275,14 @@ view ({editProjectModel} as model) =
         ]
     , case editProjectModel.updateForm of
         Just form ->
-          updateProjectForm form editProjectModel.isPending
+          updateProjectForm form editProjectModel.isPending model
         Nothing ->
           H.div [] []
     ]
 
 
-updateProjectForm : ProjectWithMembers -> Bool -> Html Msg
-updateProjectForm form isPending =
+updateProjectForm : ProjectWithMembers -> Bool -> Model -> Html Msg
+updateProjectForm form isPending model =
   let
     button = 
       case isPending of
@@ -249,6 +308,7 @@ updateProjectForm form isPending =
       , formInput "text" "Company" InputUpdateProjectCompany (Just form.company) Full
       , formInput "text" "Abbreviation" InputUpdateProjectAbbreviation (Just form.abbreviation) Full
       , formInput "color" "Colour" InputUpdateProjectColour (Just form.colour) Short
+      , membersSelect form model
       , H.div [ A.class "field" ]
         [ H.div [ A.class "control" ]
           [ button
@@ -261,9 +321,56 @@ updateProjectForm form isPending =
         ]
       ]
 
-
-members membersList = 
-  H.div
-    []
-    []
-
+membersSelect : ProjectWithMembers -> Model -> Html Msg
+membersSelect form ({editProjectModel, userModel} as model) = 
+  let
+    members =
+      List.append editProjectModel.addMembers form.members
+        |> List.filter (\user ->
+          not (List.member user editProjectModel.removeMembers)
+        )
+    availableUsers = 
+      List.filter (\user ->
+        not (List.member user members)
+      ) userModel.users
+  in
+    H.div
+      []
+      [ H.div
+        []
+        [ H.h4
+          [ A.class "title is-4" ]
+          [ H.text "Assigned" ]
+        , H.div
+          []
+          ( List.map 
+            (\user -> 
+              H.div 
+                [ E.onClick <| RemoveMembers user ] 
+                [ H.text <| fullNameString user ]
+            ) 
+            members
+          )
+        ]
+      , H.div 
+        []
+        [ H.h4
+          [ A.class "title is-4" ]
+          [ H.text "Available" ]
+        , if List.isEmpty availableUsers then
+            H.p 
+              [ A.class "subtitle has-text-centered" ] 
+              [ H.text "No users to add" ]
+          else
+            H.div
+              []
+              ( List.map 
+                (\user -> 
+                  H.div 
+                    [ E.onClick <| AddMembers user ] 
+                    [ H.text <| fullNameString user ]
+                ) 
+                availableUsers
+              )
+        ]
+      ]
