@@ -15,7 +15,12 @@ import Types.Project exposing
   )
 import Types.User exposing (User)
 import Task
-import Page exposing (InputLength(..), formInput, formSelect, fullNameString)
+import Page exposing 
+  ( InputLength(..)
+  , formInput
+  , formSelect
+  , membersSelect
+  )
 import Api exposing (sendMutationRequest)
 import Api.Project exposing 
   ( createProjectMutation
@@ -221,7 +226,7 @@ view model =
     ]
 
 createProjectForm : Model -> Html Msg
-createProjectForm ({addProjectModel} as model) =
+createProjectForm ({addProjectModel, userModel} as model) =
   let
     button = 
       case addProjectModel.isPending of
@@ -237,6 +242,11 @@ createProjectForm ({addProjectModel} as model) =
             , E.onClick SubmitCreateProject
             ]
             [ H.text "Submit" ]
+    members = addProjectModel.addMembers
+    availableUsers = 
+      List.filter (\user ->
+        not (List.member user members)
+      ) userModel.users
   in
     H.div 
       []
@@ -247,7 +257,7 @@ createProjectForm ({addProjectModel} as model) =
       , formInput "text" "Company" InputCreateProjectCompany Nothing Full
       , formInput "text" "Abbreviation" InputCreateProjectAbbreviation Nothing Full
       , formInput "color" "Colour" InputCreateProjectColour Nothing Short
-      , membersSelect model
+      , membersSelect members availableUsers RemoveMembers AddMembers
       , H.div [ A.class "field" ]
         [ H.div [ A.class "control" ]
           [ button
@@ -260,52 +270,3 @@ createProjectForm ({addProjectModel} as model) =
         ]
       ]
 
-membersSelect : Model -> Html Msg
-membersSelect ({addProjectModel, userModel} as model) = 
-  let
-    members = addProjectModel.addMembers
-    availableUsers = 
-      List.filter (\user ->
-        not (List.member user members)
-      ) userModel.users
-  in
-    H.div
-      []
-      [ H.div
-        []
-        [ H.h4
-          [ A.class "title is-4" ]
-          [ H.text "Assigned" ]
-        , H.div
-          []
-          ( List.map 
-            (\user -> 
-              H.div 
-                [ E.onClick <| RemoveMembers user ] 
-                [ H.text <| fullNameString user ]
-            ) 
-            members
-          )
-        ]
-      , H.div 
-        []
-        [ H.h4
-          [ A.class "title is-4" ]
-          [ H.text "Available" ]
-        , if List.isEmpty availableUsers then
-            H.p 
-              [ A.class "subtitle has-text-centered" ] 
-              [ H.text "No users to add" ]
-          else
-            H.div
-              []
-              ( List.map 
-                (\user -> 
-                  H.div 
-                    [ E.onClick <| AddMembers user ] 
-                    [ H.text <| fullNameString user ]
-                ) 
-                availableUsers
-              )
-        ]
-      ]

@@ -1,4 +1,10 @@
-module Page exposing (InputLength(..), formInput, formSelect, fullNameString)
+module Page exposing 
+  ( InputLength(..)
+  , formInput
+  , formSelect
+  , membersSelect
+  , fullNameString
+  )
 
 import Html as H exposing (..)
 import Html.Attributes as A exposing (..)
@@ -29,7 +35,7 @@ isFullwidth length =
     Full ->
       True
 
-formSelect : List SelectOption -> (String -> a) -> Maybe String -> InputLength -> Html a
+formSelect : List SelectOption -> (String -> msg) -> Maybe String -> InputLength -> Html msg
 formSelect list msg value inputLength =
   H.div 
     [ A.class "field" ]
@@ -68,7 +74,7 @@ formSelect list msg value inputLength =
       ]
     ]
 
-formInput : String -> String -> (String -> a) -> Maybe String -> InputLength -> Html a
+formInput : String -> String -> (String -> msg) -> Maybe String -> InputLength -> Html msg
 formInput type_ placeholder msg value inputLength =
   let
     attributes =
@@ -99,3 +105,71 @@ formInput type_ placeholder msg value inputLength =
 fullNameString : User -> String
 fullNameString user =
   user.first_name ++ " " ++ user.last_name
+
+membersSelect : List User -> List User -> (User -> msg) -> (User -> msg) -> Html msg
+membersSelect members availableUsers removeMembersMsg addMembersMsg  = 
+  H.div
+    [ A.class "field" ]
+    [ H.div
+      []
+      [ H.h4
+        [ A.class "title is-4 has-text-centered-mobile" ]
+        [ H.text "Assigned" ]
+      , if List.isEmpty members then
+          H.p 
+            [ A.class "subtitle has-text-centered is-6" ] 
+            [ H.text "No users assigned" ]
+        else
+          H.div
+            [ A.class "field is-grouped is-grouped-multiline" ]
+            ( List.map 
+              (\user -> 
+                H.div
+                  [ A.class "control" ]
+                  [ H.div 
+                    [ A.class "tags has-addons" ]
+                    [ H.span
+                      [ A.class "tag is-capitalized is-primary"
+                      ] 
+                      [ H.text <| fullNameString user ]
+                    , H.span
+                      [ E.onClick <| removeMembersMsg user
+                      , A.class "tag is-delete"
+                      ]
+                      []
+                    ]
+                  ]
+              ) 
+              members
+            )
+      ]
+    , H.div 
+      []
+      [ H.h4
+        [ A.class "title is-4 has-text-centered-mobile" ]
+        [ H.text "Available" ]
+      , if List.isEmpty availableUsers then
+          H.p 
+            [ A.class "subtitle has-text-centered is-6" ] 
+            [ H.text "No users to add" ]
+        else
+          H.div
+            [ A.class "field is-grouped is-grouped-multiline" ]
+            ( List.map 
+              (\user -> 
+                H.div
+                  [ A.class "control" ]
+                  [ H.div 
+                    [ A.class "tags has-addons" ]
+                    [ H.span
+                      [ A.class "tag is-capitalized is-primary"
+                      , E.onClick <| addMembersMsg user
+                      ] 
+                      [ H.text <| fullNameString user ]
+                    ]
+                  ]
+              ) 
+              availableUsers
+            )
+      ]
+    ]

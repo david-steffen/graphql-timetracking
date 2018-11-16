@@ -14,7 +14,12 @@ import Types.Project exposing
   )
 import Types.User exposing (User)
 import Task
-import Page exposing (InputLength(..), formInput, formSelect, fullNameString)
+import Page exposing 
+  ( InputLength(..)
+  , formInput
+  , formSelect
+  , membersSelect
+  )
 import Api exposing (sendMutationRequest)
 import Api.Project exposing 
   ( updateProjectMutation
@@ -275,17 +280,17 @@ view ({editProjectModel} as model) =
         ]
     , case editProjectModel.updateForm of
         Just form ->
-          updateProjectForm form editProjectModel.isPending model
+          updateProjectForm form model
         Nothing ->
           H.div [] []
     ]
 
 
-updateProjectForm : ProjectWithMembers -> Bool -> Model -> Html Msg
-updateProjectForm form isPending model =
+updateProjectForm : ProjectWithMembers -> Model -> Html Msg
+updateProjectForm form ({editProjectModel, userModel} as model) =
   let
     button = 
-      case isPending of
+      case editProjectModel.isPending of
         True ->
           H.button
             [ A.class "button is-primary is-loading"
@@ -298,6 +303,15 @@ updateProjectForm form isPending model =
             , E.onClick SubmitEditProject
             ]
             [ H.text "Submit" ]
+    members =
+      List.append editProjectModel.addMembers form.members
+        |> List.filter (\user ->
+          not (List.member user editProjectModel.removeMembers)
+        )
+    availableUsers = 
+      List.filter (\user ->
+        not (List.member user members)
+      ) userModel.users
   in
     H.div 
       []
@@ -308,7 +322,7 @@ updateProjectForm form isPending model =
       , formInput "text" "Company" InputUpdateProjectCompany (Just form.company) Full
       , formInput "text" "Abbreviation" InputUpdateProjectAbbreviation (Just form.abbreviation) Full
       , formInput "color" "Colour" InputUpdateProjectColour (Just form.colour) Short
-      , membersSelect form model
+      , membersSelect members availableUsers RemoveMembers AddMembers
       , H.div [ A.class "field" ]
         [ H.div [ A.class "control" ]
           [ button
@@ -321,56 +335,56 @@ updateProjectForm form isPending model =
         ]
       ]
 
-membersSelect : ProjectWithMembers -> Model -> Html Msg
-membersSelect form ({editProjectModel, userModel} as model) = 
-  let
-    members =
-      List.append editProjectModel.addMembers form.members
-        |> List.filter (\user ->
-          not (List.member user editProjectModel.removeMembers)
-        )
-    availableUsers = 
-      List.filter (\user ->
-        not (List.member user members)
-      ) userModel.users
-  in
-    H.div
-      []
-      [ H.div
-        []
-        [ H.h4
-          [ A.class "title is-4" ]
-          [ H.text "Assigned" ]
-        , H.div
-          []
-          ( List.map 
-            (\user -> 
-              H.div 
-                [ E.onClick <| RemoveMembers user ] 
-                [ H.text <| fullNameString user ]
-            ) 
-            members
-          )
-        ]
-      , H.div 
-        []
-        [ H.h4
-          [ A.class "title is-4" ]
-          [ H.text "Available" ]
-        , if List.isEmpty availableUsers then
-            H.p 
-              [ A.class "subtitle has-text-centered" ] 
-              [ H.text "No users to add" ]
-          else
-            H.div
-              []
-              ( List.map 
-                (\user -> 
-                  H.div 
-                    [ E.onClick <| AddMembers user ] 
-                    [ H.text <| fullNameString user ]
-                ) 
-                availableUsers
-              )
-        ]
-      ]
+-- membersSelect : ProjectWithMembers -> Model -> Html Msg
+-- membersSelect form ({editProjectModel, userModel} as model) = 
+--   let
+--     members =
+--       List.append editProjectModel.addMembers form.members
+--         |> List.filter (\user ->
+--           not (List.member user editProjectModel.removeMembers)
+--         )
+--     availableUsers = 
+--       List.filter (\user ->
+--         not (List.member user members)
+--       ) userModel.users
+--   in
+--     H.div
+--       []
+--       [ H.div
+--         []
+--         [ H.h4
+--           [ A.class "title is-4" ]
+--           [ H.text "Assigned" ]
+--         , H.div
+--           []
+--           ( List.map 
+--             (\user -> 
+--               H.div 
+--                 [ E.onClick <| RemoveMembers user ] 
+--                 [ H.text <| fullNameString user ]
+--             ) 
+--             members
+--           )
+--         ]
+--       , H.div 
+--         []
+--         [ H.h4
+--           [ A.class "title is-4" ]
+--           [ H.text "Available" ]
+--         , if List.isEmpty availableUsers then
+--             H.p 
+--               [ A.class "subtitle has-text-centered" ] 
+--               [ H.text "No users to add" ]
+--           else
+--             H.div
+--               []
+--               ( List.map 
+--                 (\user -> 
+--                   H.div 
+--                     [ E.onClick <| AddMembers user ] 
+--                     [ H.text <| fullNameString user ]
+--                 ) 
+--                 availableUsers
+--               )
+--         ]
+--       ]
