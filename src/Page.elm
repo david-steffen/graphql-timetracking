@@ -2,17 +2,26 @@ module Page exposing
   ( InputLength(..)
   , formInput
   , formSelect
+  , formTextArea
   , membersSelect
   , fullNameString
+  , onClickPreventDefault
+  , onChange
+  , rangeFromDate
+  , modal
   )
 
-import Html as H exposing (..)
-import Html.Attributes as A exposing (..)
-import Html.Events as E exposing (..)
+import Html exposing (..)
+import Html.Attributes as Attributes exposing (..)
+import Html.Events as Events exposing (..)
 import Json.Decode as JD
 import Uuid exposing (Uuid)
 import Types exposing (Model)
+import Types.Timelog exposing 
+  ( FilterView(..)
+  )
 import Types.User exposing (User)
+import Date exposing (Unit(..), Interval(..), Date)
 
 type alias SelectOption =
   { value : String
@@ -23,9 +32,17 @@ type InputLength
   = Short
   | Full
 
-onChange : (String -> msg) -> H.Attribute msg
+onClickPreventDefault : msg -> Attribute msg
+onClickPreventDefault msg =
+  Events.preventDefaultOn "click" <| JD.map alwaysPreventDefault <| JD.succeed msg
+
+alwaysPreventDefault : msg -> ( msg, Bool )
+alwaysPreventDefault msg =
+  ( msg, True )
+
+onChange : (String -> msg) -> Html.Attribute msg
 onChange handler =
-    E.on "change" <| JD.map handler <| JD.at ["target", "value"] JD.string
+    Events.on "change" <| JD.map handler <| JD.at ["target", "value"] JD.string
 
 isFullwidth : InputLength -> Bool
 isFullwidth length =
@@ -37,15 +54,15 @@ isFullwidth length =
 
 formSelect : List SelectOption -> (String -> msg) -> Maybe String -> InputLength -> Html msg
 formSelect list msg value inputLength =
-  H.div 
-    [ A.class "field" ]
-    [ H.label 
-      [ A.class "label" ]
-      [ H.div
-        [ A.classList [("control", True), ("is-expanded", isFullwidth inputLength)] ]
-        [ H.div 
-          [ A.classList [("select", True), ("is-fullwidth", isFullwidth inputLength)] ]
-          [ H.select
+  Html.div 
+    [ Attributes.class "field" ]
+    [ Html.label 
+      [ Attributes.class "label" ]
+      [ Html.div
+        [ Attributes.classList [("control", True), ("is-expanded", isFullwidth inputLength)] ]
+        [ Html.div 
+          [ Attributes.classList [("select", True), ("is-fullwidth", isFullwidth inputLength)] ]
+          [ Html.select
             [ onChange msg ]
             (List.map
               (\item ->
@@ -59,13 +76,12 @@ formSelect list msg value inputLength =
                           False
                       Nothing ->
                         False
-                  -- value = 
                 in
-                  H.option
-                    [ A.value item.value
-                    , A.selected selected
+                  Html.option
+                    [ Attributes.value item.value
+                    , Attributes.selected selected
                     ]
-                    [ H.text item.title ]
+                    [ Html.text item.title ]
               )
             ( SelectOption "" "Please select..." :: list )
             )
@@ -74,28 +90,54 @@ formSelect list msg value inputLength =
       ]
     ]
 
+formTextArea : String -> (String -> msg) -> Maybe String -> InputLength -> Html msg
+formTextArea placeholder msg value inputLength =
+  let
+    content =
+      case value of
+        Just val ->
+          Html.text val
+        Nothing ->
+          Html.text ""
+  in
+    Html.div 
+      [ Attributes.class "field" ]
+      [ Html.label 
+        [ Attributes.class "label" ]
+        [ Html.div 
+          [ Attributes.classList [("control", True), ("is-expanded", isFullwidth inputLength)] ]
+          [ Html.textarea
+            [ Attributes.class "textarea"
+            , Attributes.placeholder placeholder
+            , Events.onInput msg
+            ]
+            [ content ]
+          ]
+        ]
+      ]
+
 formInput : String -> String -> (String -> msg) -> Maybe String -> InputLength -> Html msg
 formInput type_ placeholder msg value inputLength =
   let
     attributes =
       case value of
         Just val ->
-          [ A.value val ]
+          [ Attributes.value val ]
         Nothing ->
           []
   in
-    H.div 
-      [ A.class "field" ]
-      [ H.label 
-        [ A.class "label" ]
-        [ H.div 
-          [ A.classList [("control", True), ("is-expanded", isFullwidth inputLength)] ]
-          [ H.input
+    Html.div 
+      [ Attributes.class "field" ]
+      [ Html.label 
+        [ Attributes.class "label" ]
+        [ Html.div 
+          [ Attributes.classList [("control", True), ("is-expanded", isFullwidth inputLength)] ]
+          [ Html.input
             (List.append attributes
-            [ A.class "input"
-            , A.type_ type_
-            , A.placeholder placeholder
-            , E.onInput msg
+            [ Attributes.class "input"
+            , Attributes.type_ type_
+            , Attributes.placeholder placeholder
+            , Events.onInput msg
             ])
             []
           ]
@@ -108,33 +150,33 @@ fullNameString user =
 
 membersSelect : List User -> List User -> (User -> msg) -> (User -> msg) -> Html msg
 membersSelect members availableUsers removeMembersMsg addMembersMsg  = 
-  H.div
-    [ A.class "field" ]
-    [ H.div
+  Html.div
+    [ Attributes.class "field" ]
+    [ Html.div
       []
-      [ H.h4
-        [ A.class "title is-4 has-text-centered-mobile" ]
-        [ H.text "Assigned" ]
+      [ Html.h4
+        [ Attributes.class "title is-4 has-text-centered-mobile" ]
+        [ Html.text "Assigned" ]
       , if List.isEmpty members then
-          H.p 
-            [ A.class "subtitle has-text-centered is-6" ] 
-            [ H.text "No users assigned" ]
+          Html.p 
+            [ Attributes.class "subtitle has-text-centered is-6" ] 
+            [ Html.text "No users assigned" ]
         else
-          H.div
-            [ A.class "field is-grouped is-grouped-multiline" ]
+          Html.div
+            [ Attributes.class "field is-grouped is-grouped-multiline" ]
             ( List.map 
               (\user -> 
-                H.div
-                  [ A.class "control" ]
-                  [ H.div 
-                    [ A.class "tags has-addons" ]
-                    [ H.span
-                      [ A.class "tag is-capitalized is-primary"
+                Html.div
+                  [ Attributes.class "control" ]
+                  [ Html.div 
+                    [ Attributes.class "tags has-addons" ]
+                    [ Html.span
+                      [ Attributes.class "tag is-capitalized is-primary"
                       ] 
-                      [ H.text <| fullNameString user ]
-                    , H.span
-                      [ E.onClick <| removeMembersMsg user
-                      , A.class "tag is-delete"
+                      [ Html.text <| fullNameString user ]
+                    , Html.span
+                      [ Events.onClick <| removeMembersMsg user
+                      , Attributes.class "tag is-delete"
                       ]
                       []
                     ]
@@ -143,33 +185,75 @@ membersSelect members availableUsers removeMembersMsg addMembersMsg  =
               members
             )
       ]
-    , H.div 
+    , Html.div 
       []
-      [ H.h4
-        [ A.class "title is-4 has-text-centered-mobile" ]
-        [ H.text "Available" ]
+      [ Html.h4
+        [ Attributes.class "title is-4 has-text-centered-mobile" ]
+        [ Html.text "Available" ]
       , if List.isEmpty availableUsers then
-          H.p 
-            [ A.class "subtitle has-text-centered is-6" ] 
-            [ H.text "No users to add" ]
+          Html.p 
+            [ Attributes.class "subtitle has-text-centered is-6" ] 
+            [ Html.text "No users to add" ]
         else
-          H.div
-            [ A.class "field is-grouped is-grouped-multiline" ]
+          Html.div
+            [ Attributes.class "field is-grouped is-grouped-multiline" ]
             ( List.map 
               (\user -> 
-                H.div
-                  [ A.class "control" ]
-                  [ H.div 
-                    [ A.class "tags has-addons" ]
-                    [ H.span
-                      [ A.class "tag is-capitalized is-primary"
-                      , E.onClick <| addMembersMsg user
+                Html.div
+                  [ Attributes.class "control" ]
+                  [ Html.div 
+                    [ Attributes.class "tags has-addons" ]
+                    [ Html.span
+                      [ Attributes.class "tag is-capitalized is-primary"
+                      , Events.onClick <| addMembersMsg user
                       ] 
-                      [ H.text <| fullNameString user ]
+                      [ Html.text <| fullNameString user ]
                     ]
                   ]
               ) 
               availableUsers
             )
       ]
+    ]
+
+rangeFromDate : Date -> FilterView -> ( Date, Date )
+rangeFromDate date filterView =
+  let
+    start =
+      case filterView of
+        WeekView ->
+          Date.floor Monday date
+        MonthView ->
+          Date.floor Month date
+    end =
+      case filterView of
+        WeekView ->
+          Date.ceiling Sunday date
+        MonthView ->
+          let
+            month = Date.add Months 1 date |> Date.floor Month
+          in
+            Date.add Days -1 month
+  in
+    (start, end)
+
+modal : (Model -> Html msg) -> Model -> Bool -> msg -> Html msg
+modal contents model showModal closeMsg =
+  Html.div 
+    [ Attributes.classList [("modal", True), ("is-active", showModal) ] ]
+    [ Html.div
+      [ Attributes.class "modal-background" ]
+      []
+    , Html.div 
+      [ Attributes.class "modal-content" ]
+      [ Html.div
+        [ Attributes.class "box" ]
+        [ contents model ]
+      ]
+    , Html.button
+      [ Attributes.class "modal-close is-large"
+      , Attributes.attribute "aria-label" "close"
+      , Events.onClick closeMsg
+      ]
+      []
     ]

@@ -1,6 +1,6 @@
 module Api.Timelog exposing (..)
 
-import Utils.TimeDelta as TimeDelta exposing (TimeDelta)
+import Utils.SimpleTime as SimpleTime exposing (..)
 import Date exposing (Date)
 import Types.Timelog exposing (Timelog)
 import Types.Project exposing (Project)
@@ -35,6 +35,7 @@ import Types.Timelog exposing
   , ProjectRefQuery
   , TimelogsRequest
   , TimelogsWithProjectsRequest
+  , EditTimelogRequest
   , CreateTimelogMutation
   , UpdateTimelogMutation
   , DeleteTimelogMutation
@@ -61,6 +62,26 @@ timelogsQuery =
   in
     queryDocument queryRoot |> request ()
 
+timelogsRangeQuery : Date -> Date -> Request Query TimelogsRequest
+timelogsRangeQuery rangeStart rangeEnd =
+  let
+    rangeStartVar =
+      Var.required "rangeStart" .rangeStart dateVar
+
+    rangeEndVar =
+      Var.required "rangeEnd" .rangeEnd dateVar
+
+    queryRoot =
+      object TimelogsRequest
+        |> with (field "timelogsByRange" 
+          [ ( "start", Arg.variable rangeStartVar )
+          , ( "end", Arg.variable rangeEndVar )
+          ] 
+          (list timelogObject))
+  in
+    queryDocument queryRoot |> request { rangeStart = rangeStart, rangeEnd = rangeEnd }
+
+
 timelogsWithProjectsQuery : Request Query TimelogsWithProjectsRequest
 timelogsWithProjectsQuery =
   let
@@ -71,20 +92,42 @@ timelogsWithProjectsQuery =
   in
     queryDocument queryRoot |> request ()
 
+timelogsRangeWithProjectsQuery : Date -> Date -> Request Query TimelogsWithProjectsRequest
+timelogsRangeWithProjectsQuery rangeStart rangeEnd =
+  let
+    rangeStartVar =
+      Var.required "rangeStart" .rangeStart dateVar
+
+    rangeEndVar =
+      Var.required "rangeEnd" .rangeEnd dateVar
+
+    queryRoot =
+      object TimelogsWithProjectsRequest
+        |> with (field "timelogsByRange" 
+          [ ( "start", Arg.variable rangeStartVar )
+          , ( "end", Arg.variable rangeEndVar )
+          ] 
+          (list timelogObject))
+        |> with (field "allProjects" [] (list projectsObject))
+
+  in
+    queryDocument queryRoot |> request { rangeStart = rangeStart, rangeEnd = rangeEnd }
+
 timelogObject : ValueSpec NonNull ObjectType (Timelog) vars
 timelogObject =
   object Timelog
     |> with (field "id" [] uuid)
     |> with (field "description" [] string)
-    |> with (field "duration" [] timeDelta)
+    |> with (field "duration" [] time)
     |> with (field "date" [] date)
     |> with (field "project" [] projectRefObject)
 
-timelogQuery : Request Query Timelog
-timelogQuery =
+
+timelogQuery : Uuid -> Request Query Timelog
+timelogQuery uuid =
   let
     timelogIDVar =
-      Var.required "id" .id Var.string
+      Var.required "taskId" .timelogId uuidVar
 
     queryRoot =
       extract
@@ -93,9 +136,22 @@ timelogQuery =
           timelogObject
         )
   in
-    queryDocument queryRoot
-      |> request
-        { id = "1" }
+    queryDocument queryRoot |> request { timelogId = uuid }
+
+editTimelogQuery : Uuid -> Request Query EditTimelogRequest
+editTimelogQuery uuid =
+  let
+    timelogIDVar =
+      Var.required "taskId" .timelogId uuidVar
+    queryRoot =
+      object EditTimelogRequest
+        |> with (field "timelog"
+            [ ( "id", Arg.variable timelogIDVar ) ]
+            timelogObject
+          )
+        |> with (field "allProjects" [] (list projectsObject))
+  in
+    queryDocument queryRoot |> request { timelogId = uuid }
 
 convertToCreateTimelogMutation : CreateTimelogForm -> CreateTimelogMutation
 convertToCreateTimelogMutation timelog =
@@ -109,7 +165,7 @@ convertToCreateTimelogMutation timelog =
     durationString =
       case timelog.duration of
         Just duration ->
-          TimeDelta.toString duration
+          SimpleTime.toString duration
         Nothing ->
           ""
   in
@@ -123,7 +179,7 @@ convertToUpdateTimelogMutation timelog =
     dateString =
       Date.toIsoString timelog.date
     durationString =
-      TimeDelta.toString timelog.duration
+      SimpleTime.toString timelog.duration
     projectId = 
       Uuid.toString timelog.project
   in

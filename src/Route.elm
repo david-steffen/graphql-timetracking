@@ -6,6 +6,8 @@ import Uuid exposing (Uuid, fromString)
 
 type Route
   = TimelogsR
+  | AddTimelogR
+  | EditTimelogR Uuid
   | ProjectsR
   | AddProjectR
   | EditProjectR Uuid
@@ -16,6 +18,8 @@ routeParser : Parser (Route -> a) a
 routeParser =
   oneOf
     [ map TimelogsR  top
+    , map AddTimelogR  (s "times" </> s "add")
+    , map EditTimelogR  (s "times" </> s "edit" </> uuid)
     , map ProjectsR  (s "projects")
     , map AddProjectR  (s "projects" </> s "add")
     , map EditProjectR  (s "projects" </> s "edit" </> uuid)

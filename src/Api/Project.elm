@@ -80,23 +80,22 @@ projectQuery : Uuid -> Request Query ProjectWithMembers
 projectQuery uuid =
   let
     projectIDVar =
-      Var.required "projectId" .projectId Var.string
+      Var.required "projectId" .projectId uuidVar
     queryRoot =
       extract
         (field "project"
             [ ( "id", Arg.variable projectIDVar ) ]
             projectWithMembersObject
         )
-    id = Uuid.toString uuid
   in
-    queryDocument queryRoot |> request { projectId = id }
+    queryDocument queryRoot |> request { projectId = uuid }
 
 
 editProjectQuery : Uuid -> Request Query EditProjectRequest
 editProjectQuery uuid =
   let
     projectIDVar =
-      Var.required "projectId" .projectId Var.string
+      Var.required "projectId" .projectId uuidVar
     queryRoot =
       object EditProjectRequest
         |> with (field "project"
@@ -104,9 +103,9 @@ editProjectQuery uuid =
             projectWithMembersObject
           )
         |> with (field "allUsers" [] (list userObject))
-    id = Uuid.toString uuid
+
   in
-    queryDocument queryRoot |> request { projectId = id }
+    queryDocument queryRoot |> request { projectId = uuid }
 
 convertToCreateProjectMutation : CreateProjectForm -> List User -> CreateProjectMutation
 convertToCreateProjectMutation project addMembers =

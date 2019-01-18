@@ -7,6 +7,18 @@ import Json.Decode as Decode exposing (Decoder, andThen, string)
 import Json.Decode.Extra as JDExtra exposing (fromResult)
 import Result exposing (Result)
 import Regex
+import Parser exposing 
+    ( Parser
+    , run
+    , oneOf
+    , succeed
+    , symbol
+    , spaces
+    , int
+    , keyword
+    , (|.)
+    , (|=)
+    )
 
 type alias TimeDelta =
   { days : Int
@@ -25,6 +37,7 @@ fromString string =
     timeArray =
       Regex.split spaceAndColon string
         |> List.map parseInt
+        |> List.filter (\x -> x >= 0)
         |> Array.fromList
 
   in
@@ -43,20 +56,22 @@ fromString string =
         , minutes = (Array.get 1 (timeArray)|> Maybe.withDefault 0)
         , seconds = (Array.get 2 (timeArray)|> Maybe.withDefault 0)
         }
-      5 ->
+      4 ->
         Ok
         { days = (Array.get 0 (timeArray)|> Maybe.withDefault 0)
-        , hours = (Array.get 2 (timeArray) |> Maybe.withDefault 0)
-        , minutes = (Array.get 3 (timeArray)|> Maybe.withDefault 0)
-        , seconds = (Array.get 4 (timeArray)|> Maybe.withDefault 0)
+        , hours = (Array.get 1 (timeArray) |> Maybe.withDefault 0)
+        , minutes = (Array.get 2 (timeArray)|> Maybe.withDefault 0)
+        , seconds = (Array.get 3 (timeArray)|> Maybe.withDefault 0)
         }
       _ ->
         Err "invalid format"
 
+
+parseInt : String -> Int
 parseInt str =
     str
         |> toInt
-        |> Maybe.withDefault 0
+        |> Maybe.withDefault -1
 
 totalTime: TimeDelta -> String
 totalTime timeDelta =

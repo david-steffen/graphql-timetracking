@@ -1,7 +1,7 @@
 module Page.Users exposing (..)
 
-import Html as H exposing (..)
-import Html.Attributes as A exposing (..)
+import Html exposing (..)
+import Html.Attributes as Attributes exposing (..)
 import Types exposing (Model)
 import Types.User exposing (UserModel)
 
@@ -22,4 +22,4 @@ update msg model =
 
 view : Model -> Html msg
 view model =
-  H.div [] []
+  Html.div [] []

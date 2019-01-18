@@ -2,12 +2,14 @@ module Main exposing (Msg)
 
 import Browser
 import Browser.Navigation as Nav
-import Html as H exposing (..)
-import Html.Attributes as A exposing (..)
-import Html.Events as E exposing (..)
+import Html exposing (..)
+import Html.Attributes as Attributes exposing (..)
+import Html.Events as Events exposing (..)
 import Url
 import Route exposing (..)
 import Page.Timelogs as Timelogs exposing (..)
+import Page.Timelogs.AddTimelog as AddTimelog exposing (..)
+import Page.Timelogs.EditTimelog as EditTimelog exposing (..)
 import Page.Projects as Projects exposing (..)
 import Page.Projects.AddProject as AddProject exposing (..)
 import Page.Projects.EditProject as EditProject exposing (..)
@@ -16,19 +18,22 @@ import Page.About as About exposing (..)
 import Page.NotFound as NotFound exposing (..)
 import Json.Decode as JD exposing (..)
 import Api exposing (sendQueryRequest)
-import Api.Timelog exposing (timelogsQuery, timelogsWithProjectsQuery)
+import Api.Timelog exposing (timelogsQuery, timelogsRangeWithProjectsQuery, timelogsWithProjectsQuery, editTimelogQuery)
 import Api.Project exposing (projectsQuery, projectQuery, editProjectQuery)
 import Api.User exposing (usersQuery)
 import GraphQL.Client.Http as GraphQLClient
 import Task exposing (Task)
 import Types exposing (Model, Flags)
-import Types.Timelog exposing (TimelogsRequest, TimelogsWithProjectsRequest)
+import Types.Timelog exposing (TimelogsRequest, TimelogsWithProjectsRequest, EditTimelogRequest, UpdateTimelogForm)
 import Types.Project exposing (Project, ProjectWithMembers, ProjectsRequest, EditProjectRequest)
 import Types.User exposing (User, UsersRequest)
 import Array exposing (Array)
 import Uuid exposing (Uuid)
--- MAIN
+import Date exposing (Unit(..), Interval(..))
+import Time exposing (millisToPosix, utc)
 
+
+-- MAIN
 
 main : Program Flags Model Msg
 main =
@@ -51,11 +56,14 @@ init flags url key =
     , url = url
     , csrf = flags.csrftoken
     , timelogModel = Timelogs.init
+    , addTimelogModel = AddTimelog.init
+    , editTimelogModel = EditTimelog.init
     , projectModel = Projects.init
     , addProjectModel = AddProject.init
     , editProjectModel = EditProject.init
     , userModel = Users.init
     , showMenu = False
+    , today = Date.fromPosix utc (millisToPosix 0)
     }
 
 
@@ -66,20 +74,23 @@ type Msg
   = LinkClicked Browser.UrlRequest
   | UrlChanged Url.Url
   | TimelogMsg Timelogs.Msg
+  | AddTimelogMsg AddTimelog.Msg
+  | EditTimelogMsg EditTimelog.Msg
   | ProjectMsg Projects.Msg
   | AddProjectMsg AddProject.Msg
   | EditProjectMsg EditProject.Msg
   | UserMsg Users.Msg
   | ReceiveTimelogsResponse (Result GraphQLClient.Error TimelogsRequest)
   | ReceiveTimelogsWithProjectsResponse (Result GraphQLClient.Error TimelogsWithProjectsRequest)
+  | ReceiveEditTimelogResponse (Result GraphQLClient.Error EditTimelogRequest)
   | ReceiveProjectsResponse (Result GraphQLClient.Error ProjectsRequest)
   | ReceiveProjectResponse (Result GraphQLClient.Error ProjectWithMembers)
   | ReceiveEditProjectResponse (Result GraphQLClient.Error EditProjectRequest)
   | ReceiveUsersResponse (Result GraphQLClient.Error UsersRequest)
   | ToggleMenu
   | Logout
+  | ReceiveDate Date.Date
   -- | NotFoundMsg NotFound.Msg
-
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -97,7 +108,10 @@ update msg model =
 
     TimelogMsg timelogMsg ->
       stepTimelog model ( Timelogs.update timelogMsg model )
-
+    AddTimelogMsg addTimelogMsg ->
+      stepAddTimelog model ( AddTimelog.update addTimelogMsg model )
+    EditTimelogMsg editTimelogMsg ->
+      stepEditTimelog model ( EditTimelog.update editTimelogMsg model )
     ProjectMsg projectMsg ->
       stepProject model ( Projects.update projectMsg model )
     AddProjectMsg addProjectMsg ->
@@ -107,6 +121,7 @@ update msg model =
     UserMsg userMsg ->
       stepUser model ( Users.update userMsg model )
     ReceiveTimelogsResponse (Err err) ->
+      Debug.log (Debug.toString err)
       ( model, Cmd.none ) 
     ReceiveTimelogsResponse (Ok response) ->
       let
@@ -120,6 +135,7 @@ update msg model =
         , Cmd.none 
         )
     ReceiveTimelogsWithProjectsResponse (Err err) ->
+      Debug.log (Debug.toString err)
       ( model, Cmd.none ) 
     ReceiveTimelogsWithProjectsResponse (Ok response) ->
       let
@@ -132,6 +148,32 @@ update msg model =
       in
         ( { model
           | timelogModel = newTimelogModel
+          , projectModel = newProjectModel
+          }
+        , Cmd.none 
+        )
+    ReceiveEditTimelogResponse (Err err) ->
+      ( model, Cmd.none ) 
+    ReceiveEditTimelogResponse (Ok response) ->
+      let
+        editTimelogModel = model.editTimelogModel
+        projectModel = model.projectModel
+        form = 
+          UpdateTimelogForm 
+            response.timelog.id 
+            response.timelog.description 
+            response.timelog.duration
+            response.timelog.date
+            response.timelog.project.id
+        newTimelogModel = 
+          { editTimelogModel 
+          | updateForm = Just form 
+          }
+        newProjectModel =
+          { projectModel | projects = Array.fromList response.allProjects}
+      in
+        ( { model
+          | editTimelogModel = newTimelogModel
           , projectModel = newProjectModel
           }
         , Cmd.none 
@@ -201,11 +243,38 @@ update msg model =
       )
     Logout ->
       ( model, Nav.load "/accounts/logout/" )
+    ReceiveDate today ->
+      let
+        timelogModel = model.timelogModel
+        newTimelogModel = 
+          { timelogModel
+          | filterDate = today 
+          }
+      in
+        ( { model | today = today, timelogModel = newTimelogModel }, 
+          if model.projectModel.readyProjects then
+            sendTimeLogsQuery model.csrf today model.timelogModel.filterView ReceiveTimelogsResponse
+          else
+            sendTimeLogsWithProjectsQuery model.csrf today model.timelogModel.filterView ReceiveTimelogsWithProjectsResponse
+          )
+
 
 stepTimelog : Model -> ( Model, Cmd Timelogs.Msg ) -> ( Model, Cmd Msg )
 stepTimelog model (timelogModel, cmds) =
   ( timelogModel
   , Cmd.map TimelogMsg cmds
+  )
+
+stepAddTimelog : Model -> ( Model, Cmd AddTimelog.Msg ) -> ( Model, Cmd Msg )
+stepAddTimelog model (addTimelogModel, cmds) =
+  ( addTimelogModel
+  , Cmd.map AddTimelogMsg cmds
+  )
+
+stepEditTimelog : Model -> ( Model, Cmd EditTimelog.Msg ) -> ( Model, Cmd Msg )
+stepEditTimelog model (editTimelogModel, cmds) =
+  ( editTimelogModel
+  , Cmd.map EditTimelogMsg cmds
   )
 
 stepProject : Model -> ( Model, Cmd Projects.Msg ) -> ( Model, Cmd Msg )
@@ -232,16 +301,6 @@ stepUser model (userModel, cmds) =
   , Cmd.map UserMsg cmds
   )
 
-sendTimeLogsQuery : String -> Cmd Msg
-sendTimeLogsQuery csrf =
-  sendQueryRequest csrf timelogsQuery
-    |> Task.attempt ReceiveTimelogsResponse
-
-sendTimeLogsWithProjectsQuery : String -> Cmd Msg
-sendTimeLogsWithProjectsQuery csrf =
-  sendQueryRequest csrf timelogsWithProjectsQuery 
-    |> Task.attempt ReceiveTimelogsWithProjectsResponse
-
 sendProjectsQuery : String -> Cmd Msg
 sendProjectsQuery csrf =
   sendQueryRequest csrf projectsQuery
@@ -262,6 +321,10 @@ sendEditProjectQuery csrf uuid =
   sendQueryRequest csrf (editProjectQuery uuid)
     |> Task.attempt ReceiveEditProjectResponse
 
+initTimelogPage : Cmd Msg
+initTimelogPage = 
+  Date.today |> Task.perform ReceiveDate
+
 handleRoute : Model -> ( Model, Cmd Msg )
 handleRoute ({ timelogModel, projectModel, csrf } as model) =
   let
@@ -271,11 +334,17 @@ handleRoute ({ timelogModel, projectModel, csrf } as model) =
       TimelogsR ->
         if timelogModel.readyTimes then
           ( model, Cmd.none )
-        else if projectModel.readyProjects then
-          ( model, sendTimeLogsQuery csrf )
+        -- else if projectModel.readyProjects then
+        --   ( model, sendTimeLogsQuery csrf )
         else
-          ( model, sendTimeLogsWithProjectsQuery csrf )
-
+          ( model, initTimelogPage )
+      AddTimelogR ->
+        if projectModel.readyProjects then
+          ( model, Cmd.none )
+        else
+          ( model, sendProjectsQuery csrf )
+      EditTimelogR uuid ->
+        ( model, sendEditTimelogQuery csrf uuid ReceiveEditTimelogResponse)
       ProjectsR ->
         if projectModel.readyProjects then
           ( model, Cmd.none )
@@ -322,11 +391,11 @@ view model =
     { title =  title <| (Route.fromUrl model.url)
     , body =
         [ header model
-        , H.section
-          [ A.class "section"
+        , Html.section
+          [ Attributes.class "section"
           ]
-          [ H.div
-            [ A.class "container" ]
+          [ Html.div
+            [ Attributes.class "container" ]
             [ viewPage model ]
           ]
         ]
@@ -340,20 +409,24 @@ viewPage model =
   in
     case currentRoute of
       TimelogsR ->
-        H.map TimelogMsg (Timelogs.view model)
+        Html.map TimelogMsg (Timelogs.view model)
+      AddTimelogR ->
+        Html.map AddTimelogMsg (AddTimelog.view model)
+      EditTimelogR uuid ->
+        Html.map EditTimelogMsg (EditTimelog.view model)
       ProjectsR ->
-        H.map ProjectMsg (Projects.view model)
+        Html.map ProjectMsg (Projects.view model)
       AddProjectR ->
-        H.map AddProjectMsg (AddProject.view model)
+        Html.map AddProjectMsg (AddProject.view model)
       EditProjectR uuid ->
-        H.map EditProjectMsg (EditProject.view model)
+        Html.map EditProjectMsg (EditProject.view model)
       _ ->
-        H.div [] []
+        Html.div [] []
 
 header : Model -> Html Msg
 header model =
-    H.header [ A.class "header" ]
-        [ H.div [ A.class "container is-fluid" ] [ nav model ]
+    Html.header [ Attributes.class "header" ]
+        [ Html.div [ Attributes.class "container is-fluid" ] [ nav model ]
         ]
 
 nav : Model -> Html Msg
@@ -361,25 +434,25 @@ nav model =
   let
       route = Route.fromUrl model.url
   in
-    H.nav
-      [ A.class "navbar"
-      , A.attribute "role" "navigation"
-      , A.attribute "aria-label" "main navigation"
+    Html.nav
+      [ Attributes.class "navbar"
+      , Attributes.attribute "role" "navigation"
+      , Attributes.attribute "aria-label" "main navigation"
       ]
-      [ H.div
-        [ A.class "navbar-brand" ]
+      [ Html.div
+        [ Attributes.class "navbar-brand" ]
         ( navbarBrand model.showMenu )
-      , H.div
-        [ A.classList [ ("navbar-menu", True), ("is-active", model.showMenu) ]
+      , Html.div
+        [ Attributes.classList [ ("navbar-menu", True), ("is-active", model.showMenu) ]
         ]
-        [ H.ul [ A.class "navbar-start" ]
+        [ Html.ul [ Attributes.class "navbar-start" ]
           [ link "/" "Times" route TimelogsR
           , link "/projects" "Projects" route ProjectsR
-          , H.li 
-            [ E.onClick Logout ]
-            [ H.p
+          , Html.li 
+            [ Events.onClick Logout ]
+            [ Html.p
               []
-              [ H.text "Logout" ]
+              [ Html.text "Logout" ]
             ]
           ]
         ]
@@ -394,44 +467,44 @@ link href title_ currentRoute route =
       else 
         ""
   in
-    H.li 
+    Html.li 
       []
-      [ H.a
-        [ A.href href 
-        , A.class classString
+      [ Html.a
+        [ Attributes.href href 
+        , Attributes.class classString
         ]
-        [ H.text title_]
+        [ Html.text title_]
       ] 
 
 navbarBrand : Bool -> List (Html Msg)
 navbarBrand showMenu =
-  [ H.a
-    [ A.class "navbar-item"
-    , A.href "/"
+  [ Html.a
+    [ Attributes.class "navbar-item"
+    , Attributes.href "/"
     ]
-    [ H.h1
-        [ A.class "title is-1" ]
-        [ H.span [ A.class "icon is-large" ] [ H.i [ A.class "far fa-clock" ] [] ]
-        , H.text "Time Trackr"
+    [ Html.h1
+        [ Attributes.class "title is-1" ]
+        [ Html.span [ Attributes.class "icon is-large" ] [ Html.i [ Attributes.class "far fa-clock" ] [] ]
+        , Html.text "Time Trackr"
         ]
     ]
-  , H.div
-    [ A.attribute "role" "button"
-    , A.classList [ ("navbar-burger", True), ("is-active", showMenu) ] 
-    , A.attribute "aria-label" "menu" 
-    , A.attribute "aria-expanded" "false"
-    , E.onClick ToggleMenu
+  , Html.div
+    [ Attributes.attribute "role" "button"
+    , Attributes.classList [ ("navbar-burger", True), ("is-active", showMenu) ] 
+    , Attributes.attribute "aria-label" "menu" 
+    , Attributes.attribute "aria-expanded" "false"
+    , Events.onClick ToggleMenu
     ]
-    [ H.span 
-      [ A.attribute "aria-hidden" "true"
+    [ Html.span 
+      [ Attributes.attribute "aria-hidden" "true"
       ]
       []
-    , H.span 
-      [ A.attribute "aria-hidden" "true"
+    , Html.span 
+      [ Attributes.attribute "aria-hidden" "true"
       ]
       []
-    , H.span 
-      [ A.attribute "aria-hidden" "true"
+    , Html.span 
+      [ Attributes.attribute "aria-hidden" "true"
       ]
       []
     ]
@@ -443,6 +516,6 @@ alwaysPreventDefault msg =
 
 footer: Html msg
 footer =
-  H.footer 
+  Html.footer 
     [] 
     []

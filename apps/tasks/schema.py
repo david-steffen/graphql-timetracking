@@ -9,7 +9,7 @@ from apps.projects.schema import ProjectNode
 class TaskNode(ObjectType):
     id = graphene.UUID()
     project = graphene.Field(ProjectNode, id=graphene.UUID())
-    duration = TimeDelta()
+    duration = graphene.types.datetime.Time()
     description = graphene.String()
     date = graphene.types.datetime.Date()
     logged = graphene.Boolean()
@@ -28,8 +28,9 @@ class TaskNode(ObjectType):
 
 
 class Query(object):
-    timelog = graphene.Field(TaskNode, id=graphene.UUID())
+    timelog = graphene.Field(TaskNode, id=graphene.UUID(required=True))
     all_timelogs = graphene.List(TaskNode)
+    timelogs_by_range = graphene.List(TaskNode, start=graphene.types.datetime.Date(required=True), end=graphene.types.datetime.Date(required=True))
 
     def resolve_all_timelogs(self, info, **kwargs):
         if not info.context.user.is_authenticated:
@@ -38,20 +39,29 @@ class Query(object):
             return Task.objects.filter(user=info.context.user)
 
 
+    def resolve_timelogs_by_range(self, info, **kwargs):
+        start = kwargs.get('start')
+        end = kwargs.get('end')
+        if not info.context.user.is_authenticated:
+            return Task.objects.none()
+        else:
+            return (Task.objects.filter(user=info.context.user)
+                .filter(date__gte=start)
+                .filter(date__lte=end)
+                )
+
     def resolve_timelog(self, info, **kwargs):
         id = kwargs.get('id')
 
         if not info.context.user.is_authenticated:
             return Task.objects.none()
-        elif id is not None:
-            return Task.objects.filter(user=info.context.user).get(pk=id)
         else:
-            return None
+            return Task.objects.filter(user=info.context.user).get(pk=id)
 
 
 class TaskInput(graphene.InputObjectType):
     project = graphene.String(required=True)
-    duration = TimeDelta(required=True)
+    duration = graphene.types.datetime.Time(required=True)
     description = graphene.String(required=True, default_value='')
     date = graphene.types.datetime.DateTime(required=True)
     logged = graphene.Boolean(default_value=True)
@@ -113,14 +123,14 @@ class UpdateTask(graphene.Mutation):
 
 
 class DeleteTaskInput(graphene.InputObjectType):
-    id = graphene.String(required=True)
+    id = graphene.UUID(required=True)
 
 
 class DeleteTask(graphene.Mutation):
     class Arguments:
         input = DeleteTaskInput(required=True)
 
-    taskId = graphene.String()
+    taskId = graphene.UUID()
     ok = graphene.Boolean()
 
     @staticmethod

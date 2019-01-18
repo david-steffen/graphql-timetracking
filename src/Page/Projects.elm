@@ -1,8 +1,8 @@
 module Page.Projects exposing (..)
 
-import Html as H exposing (..)
-import Html.Attributes as A exposing (..)
-import Html.Events as E exposing (..)
+import Html exposing (..)
+import Html.Attributes as Attributes exposing (..)
+import Html.Events as Events exposing (..)
 import Date exposing (..)
 import Uuid exposing (Uuid)
 import Types exposing (Model)
@@ -11,19 +11,9 @@ import Types.Project exposing
   ( Project
   , ProjectModel
   , CreateProjectForm
-  , ProjectDeleteMutationResult
   )
 import Task
-import Page exposing (InputLength(..), formInput, formSelect)
-import Api exposing (sendMutationRequest)
-import Api.Project exposing 
-  ( createProjectMutation
-  , updateProjectMutation
-  , deleteProjectMutation
-  , processCreateProjectInput
-  , processUpdateProjectInput
-  , processDeleteProjectInput
-  )
+
 import Array exposing (Array)
 
 
@@ -33,256 +23,112 @@ init =
   , projects = Array.empty
   , errResult = Nothing
   , isPending = False
-  , deleteId = Nothing
   }
 
 type Msg  
-  = ReceiveDeleteProjectMutationResponse (Result GraphQLClient.Error ProjectDeleteMutationResult)
-  | DeleteProject Uuid
-  | SubmitDeleteProject
-  | CloseFormModal
+  = None
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ({ timelogModel, projectModel } as model) =
-  case msg of
-    ReceiveDeleteProjectMutationResponse (Err err) ->
-      let
-        newProjectModel = 
-          { projectModel 
-          | isPending = False
-          , deleteId = Nothing
-          }  
-      in
-        ( passToModel newProjectModel model
-        , Cmd.none
-        )
-    ReceiveDeleteProjectMutationResponse (Ok response) ->
-      let
-        projects = Array.filter (\x -> response.projectId /= x.id) projectModel.projects
-        timelogs = Array.filter (\x -> response.projectId /= x.project.id) timelogModel.timelogs
-        newProjectModel = 
-          { projectModel 
-          | projects = projects
-          , isPending = False
-          , deleteId = Nothing
-          }
-        newTimelogModel = 
-          { timelogModel
-          | timelogs = timelogs
-          }
-      in
-        ( { model | projectModel = newProjectModel, timelogModel = newTimelogModel}
-        , Cmd.none
-        )
-    DeleteProject id ->
-      ( passToModel 
-        { projectModel 
-        | deleteId = Just id
-        }
-        model
-      , Cmd.none
-      )
-    SubmitDeleteProject ->
-      ( passToModel 
-        { projectModel 
-        | isPending = True
-        }
-        model
-      , sendDeleteProjectMutation model
-      )
-    CloseFormModal ->
-      ( passToModel 
-        { projectModel 
-        | deleteId = Nothing
-        }
-        model
-      , Cmd.none
-      )
+  (model, Cmd.none)
+
 
 passToModel : ProjectModel -> Model -> Model
 passToModel projectModel model =
   { model | projectModel = projectModel }
 
-sendDeleteProjectMutation : Model -> Cmd Msg
-sendDeleteProjectMutation ({projectModel} as model) =
-  case projectModel.deleteId of 
-    Just id ->
-      sendMutationRequest model.csrf (deleteProjectMutation <| processDeleteProjectInput id)
-        |> Task.attempt ReceiveDeleteProjectMutationResponse
-    Nothing ->
-      Cmd.none
-
-
 view : Model -> Html Msg
 view model =
-  H.div 
+  Html.div 
     [] 
-    [ H.div
-      [ A.class "level" ]
-      [ H.div
-        [ A.class "level-left" ]
-        [ H.h2 
-          [ A.class "title" 
+    [ Html.div
+      [ Attributes.class "level" ]
+      [ Html.div
+        [ Attributes.class "level-left" ]
+        [ Html.h2 
+          [ Attributes.class "title" 
           ] 
-          [ H.text "Projects"]
+          [ Html.text "Projects"]
         ]
-      , H.div
-        [ A.class "level-right" ]
-        [ H.a
-          [ A.class "button is-success" 
-          , A.href "/projects/add"
+      , Html.div
+        [ Attributes.class "level-right" ]
+        [ Html.a
+          [ Attributes.class "button is-success" 
+          , Attributes.href "/projects/add"
           ]
-          [ H.span
-            [ A.class "icon is-small" ]
-            [ H.span
-              [ A.class "fas fa-plus-circle" ]
+          [ Html.span
+            [ Attributes.class "icon is-small" ]
+            [ Html.span
+              [ Attributes.class "fas fa-plus-circle" ]
               []
             ]
-          , H.span
+          , Html.span
             []
-            [ H.text "New" ]
+            [ Html.text "New" ]
           ]
         ]
       ]
-    , H.div 
+    , Html.div 
       []
       [ projectList model ]
-    , formModal model
     ]
 
 projectView: Int -> Project -> Html Msg
 projectView index project =
-  H.div
-    [ A.class "custom-box"
-    ]
-    [ H.div
-      [ A.class "media" ]
-      [ H.div
-        [ A.class "media-left" ]
-        [ H.div
-          [ A.class "project-circle title is-6 has-text-centered"
-          , A.style "border-color" project.colour 
+      Html.div
+      [ Attributes.class "custom-columns" ]
+      [ Html.div
+        [ Attributes.class "custom-column column-1" ]
+        [ Html.div
+          [ Attributes.class "project-circle"
+          , Attributes.style "border-color" project.colour
           ]
-          [ H.text project.abbreviation
-          ]
-        ]
-      , H.div
-        [ A.class "media-content" ]
-        [ H.div
-          [ A.class "content" ]
-          [ H.p
-            [ A.class "has-text-weight-bold" ]
-            [ H.text project.name
-            , H.br [] []
-            , H.text project.company
+          []
+        , Html.div
+          [ Attributes.class "project-details" ]
+          [ Html.div
+            [ Attributes.class "has-text-weight-bold is-size-5"]
+            [ Html.text project.abbreviation
             ]
           ]
         ]
+      , Html.div
+        [ Attributes.class "custom-column column-2" ]
+        [ Html.div 
+          [ Attributes.class "has-text-weight-bold is-size-5" ]
+          [ Html.text project.name ]
+        , Html.div
+          []
+          [ Html.text project.company ]
+        ]
+      , Html.div
+        [ Attributes.class "custom-column column-3" ]
+        [ actions index project.id ]
+        
       ]
-    , actions index project.id
-    ]
-
-projectForm : Model -> Html Msg
-projectForm ( {projectModel} as model) = 
-  deleteProjectForm model
 
 projectList : Model -> Html Msg
 projectList model =
-  H.div
-    [ A.class "row-group"  ]
+  Html.div
+    [ Attributes.class "row-group"  ]
     (List.indexedMap projectView <| Array.toList model.projectModel.projects)
 
 actions : Int -> Uuid -> Html Msg
 actions index id =
-  H.div
-    []
-    [ H.a
-      [ A.class "icon"
-      , A.href <| "/projects/edit/" ++ (Uuid.toString id)
+  Html.div
+    [ Attributes.class "buttons" ]
+    [ Html.a
+      [ Attributes.class "button"
+      , Attributes.href <| "/projects/edit/" ++ (Uuid.toString id)
       ]
-      [ H.span
-        [ A.class "fas fa-pen"
+      [ Html.span
+        [ Attributes.class "fas fa-pen"
         ]
         []
       ]
-    , H.span
-      [ A.class "delete"
-      , E.onClick <| DeleteProject id
-      ]
-      []
+    -- , Html.span
+    --   [ Attributes.class "delete"
+    --   , Events.onClick <| DeleteProject id
+    --   ]
+    --   []
     ]
-
-formModal : Model -> Html Msg
-formModal model =
-  let
-    showModal =
-      case model.projectModel.deleteId of 
-        Just val ->
-          True
-        Nothing ->
-          False
-  in
-    H.div 
-      [ A.classList [("modal", True), ("is-active", showModal) ] ]
-      [ H.div
-        [ A.class "modal-background" ]
-        []
-      , H.div 
-        [ A.class "modal-content" ]
-        [ H.div
-          [ A.class "box" ]
-          [ projectForm model ]
-        ]
-      , H.button
-        [ A.class "modal-close is-large"
-        , A.attribute "aria-label" "close"
-        , E.onClick CloseFormModal
-        ]
-        []
-      ]
-
-deleteProjectForm : Model -> Html Msg
-deleteProjectForm ( {projectModel} as model) =
-  let
-    button = 
-      case projectModel.isPending of
-        True ->
-          H.button
-            [ A.class "button is-primary is-loading"
-            , A.attribute "disabled" "disabled"
-            ]
-            [ H.text "Confirm" ]
-        False ->
-          H.button
-            [ A.class "button is-primary"
-            , E.onClick <| SubmitDeleteProject
-            ]
-            [ H.text "Confirm" ]
-  in
-    H.div 
-      []
-      [ H.h3
-        [ A.class "title" ]
-        [ H.text "Delete" ]
-      , H.p
-        [ A.class "field" ]
-        [ H.text "Are you sure you want to delete this project?" ]
-      , H.p
-        [ A.class "field" ]
-        [ H.text "You will lose all data associated with this project including the times logged against it" ]
-      , H.div 
-        [ A.class "field" ]
-        [ H.div 
-          [ A.class "control" ]
-          [ H.div
-            [ A.class "buttons" ]
-            [ button
-            , H.button
-              [ A.class "button is-text"
-              , E.onClick CloseFormModal
-              ]
-              [ H.text "Cancel" ]
-            ]
-          ]
-        ]
-      ]

@@ -4,23 +4,38 @@ import Array exposing (Array)
 import Uuid exposing (Uuid)
 import Types.Project exposing (Project)
 import Date exposing (Date)
-import Utils.TimeDelta exposing (TimeDelta)
+import Utils.SimpleTime exposing (Time)
+
+type FilterView
+  = WeekView
+  | MonthView
 
 type alias TimelogModel =
   { readyTimes : Bool
   , timelogs : Array Timelog
-  , createForm : Maybe CreateTimelogForm
-  , updateForm : Maybe UpdateTimelogForm
-  , formAction : TimelogFormAction
   , errResult : Maybe String
   , isPending : Bool
-  , deleteId : Maybe Uuid
+  , filterView : FilterView
+  , filterDate : Date
+  }
+
+type alias AddTimelogModel =
+  { createForm : Maybe CreateTimelogForm
+  , errResult : Maybe String
+  , isPending : Bool
+  }
+
+type alias EditTimelogModel =
+  { updateForm : Maybe UpdateTimelogForm
+  , errResult : Maybe String
+  , isPending : Bool
+  , showModal : Bool
   }
 
 type alias TimelogWithProject =
   { id : Uuid
   , description : String
-  , duration : TimeDelta
+  , duration : Time
   , date : Date
   , project : Project
   }
@@ -28,7 +43,7 @@ type alias TimelogWithProject =
 type alias Timelog =
   { id : Uuid
   , description : String
-  , duration : TimeDelta
+  , duration : Time
   , date : Date
   , project : ProjectRefQuery
   }
@@ -43,6 +58,11 @@ type alias TimelogsRequest =
 
 type alias TimelogsWithProjectsRequest =
   { allTimelogs : List Timelog
+  , allProjects : List Project
+  }
+
+type alias EditTimelogRequest =
+  { timelog : Timelog
   , allProjects : List Project
   }
 
@@ -86,7 +106,7 @@ type alias DeleteTimelogInput =
 
 type alias CreateTimelogForm =
   { description : String
-  , duration : Maybe TimeDelta
+  , duration : Maybe Time
   , date : Maybe Date
   , project : String
   }
@@ -94,13 +114,7 @@ type alias CreateTimelogForm =
 type alias UpdateTimelogForm =
   { id : Uuid
   , description : String
-  , duration : TimeDelta
+  , duration : Time
   , date : Date
   , project : Uuid
   }
-
-type TimelogFormAction
-  = Noop
-  | Create
-  | Update
-  | Delete

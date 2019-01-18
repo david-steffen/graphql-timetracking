@@ -2,7 +2,7 @@ from apps.projects.models import Project, ProjectMember
 from apps.accounts.schema import UserNode, AccountNode
 import graphene
 from graphene_django.types import DjangoObjectType, ObjectType
-
+from apps.accounts.models import Account
 
 class ProjectNode(DjangoObjectType):
     members = graphene.List(UserNode)
@@ -37,14 +37,16 @@ class ProjectMemberNode(ObjectType):
 
 
 class Query(object):
-    project = graphene.Field(ProjectNode, id=graphene.String())
+    project = graphene.Field(ProjectNode, id=graphene.UUID())
     all_projects = graphene.List(ProjectNode)
 
     def resolve_all_projects(self, info, **kwargs):
         if not info.context.user.is_authenticated:
             return None
-        else:
+        elif info.context.user.has_perm('projects.add_project') and info.context.user.account.type is not Account.FREE:
             return Project.objects.filter(account=info.context.user.account)
+        else:
+            return Project.objects.filter(members=info.context.user.account)
 
     def resolve_project(self, info, **kwargs):
         id = kwargs.get('id')
@@ -61,7 +63,7 @@ class ProjectInput(graphene.InputObjectType):
     name = graphene.String(required=True)
     company = graphene.String()
     status = graphene.Boolean()
-    add_members = graphene.List(graphene.String, name='add_members')
+    add_members = graphene.List(graphene.UUID, name='add_members')
 
 
 class CreateProject(graphene.Mutation):
@@ -95,8 +97,8 @@ class CreateProject(graphene.Mutation):
 
 
 class UpdateProjectInput(ProjectInput):
-    id = graphene.String(required=True)
-    remove_members = graphene.List(graphene.String, name='remove_members')
+    id = graphene.UUID(required=True)
+    remove_members = graphene.List(graphene.UUID, name='remove_members')
 
 
 class UpdateProject(graphene.Mutation):
@@ -108,7 +110,7 @@ class UpdateProject(graphene.Mutation):
 
     @staticmethod
     def mutate(self, info, input=None):
-        project = Project.objects.filter(members=info.context.user).get(pk=input.get('id'))
+        project = Project.objects.filter(account=info.context.user.account).get(pk=input.get('id'))
         ok = False
         if project is not None:
             project.colour = input.get('colour', '#333333')
@@ -134,7 +136,7 @@ class UpdateProject(graphene.Mutation):
 
 
 class DeleteProjectInput(graphene.InputObjectType):
-    id = graphene.String(required=True)
+    id = graphene.UUID(required=True)
 
 
 class DeleteProject(graphene.Mutation):

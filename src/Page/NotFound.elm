@@ -1,7 +1,7 @@
 module Page.NotFound exposing (..)
 
-import Html as H exposing (..)
-import Html.Attributes as A exposing (..)
+import Html exposing (..)
+import Html.Attributes as Attributes exposing (..)
 
 type alias Model =
   { }
@@ -18,23 +18,23 @@ update msg model =
 
 view : Model -> Html msg
 view model =
-  H.div 
-    [ A.class "not-found-wrap"
+  Html.div 
+    [ Attributes.class "not-found-wrap"
     ]
-    [ H.h1 [] [ H.text "404" ]
-    , H.div
+    [ Html.h1 [] [ Html.text "404" ]
+    , Html.div
       []
-      [ H.p []
-        [ H.text
+      [ Html.p []
+        [ Html.text
         """
         Page not found
         """
         ]
-      , H.a
-        [ A.href "/"
+      , Html.a
+        [ Attributes.href "/"
         ]
-        [ H.span
-          [ A.class "fa fa-home"
+        [ Html.span
+          [ Attributes.class "fa fa-home"
           ]
           []
         ]

@@ -1,8 +1,8 @@
 module Page.Projects.EditProject exposing (..)
 
-import Html as H exposing (..)
-import Html.Attributes as A exposing (..)
-import Html.Events as E exposing (..)
+import Html exposing (..)
+import Html.Attributes as Attributes exposing (..)
+import Html.Events as Events exposing (..)
 import Uuid exposing (Uuid)
 import GraphQL.Client.Http as GraphQLClient
 import Types exposing (Model)
@@ -11,6 +11,7 @@ import Types.Project exposing
   , ProjectWithMembers
   , EditProjectModel
   , ProjectMutationResult
+  , ProjectDeleteMutationResult
   )
 import Types.User exposing (User)
 import Task
@@ -19,11 +20,14 @@ import Page exposing
   , formInput
   , formSelect
   , membersSelect
+  , modal
   )
 import Api exposing (sendMutationRequest)
 import Api.Project exposing 
   ( updateProjectMutation
+  , deleteProjectMutation
   , processUpdateProjectInput
+  , processDeleteProjectInput
   )
 import Array exposing (Array)
 import Browser.Navigation as Nav
@@ -35,6 +39,7 @@ init =
   , isPending = False
   , addMembers = []
   , removeMembers = []
+  , showModal = False
   }
 
 type Msg  
@@ -47,10 +52,14 @@ type Msg
   | CancelEdit
   | AddMembers User
   | RemoveMembers User
+  | ReceiveDeleteProjectMutationResponse (Result GraphQLClient.Error ProjectDeleteMutationResult)
+  | DeleteProject
+  | SubmitDeleteProject
+  | CloseFormModal
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg ({ projectModel, editProjectModel } as model) =
+update msg ({ timelogModel, projectModel, editProjectModel } as model) =
   case msg of
     ReceiveUpdateProjectMutationResponse (Err err) ->
       let
@@ -238,6 +247,66 @@ update msg ({ projectModel, editProjectModel } as model) =
           | editProjectModel = newEditProjectModel 
           }
         , Cmd.none)
+    ReceiveDeleteProjectMutationResponse (Err err) ->
+      let
+        newProjectModel = 
+          { editProjectModel 
+          | isPending = False
+          , showModal = False
+          }  
+      in
+        ( passToModel newProjectModel model
+        , Cmd.none
+        )
+    ReceiveDeleteProjectMutationResponse (Ok response) ->
+      let
+        projects = Array.filter (\x -> response.projectId /= x.id) projectModel.projects
+        timelogs = Array.filter (\x -> response.projectId /= x.project.id) timelogModel.timelogs
+        newProjectModel = 
+          { projectModel 
+          | projects = projects
+          , isPending = False
+          }
+        newTimelogModel = 
+          { timelogModel
+          | timelogs = timelogs
+          }
+        newEditProjectModal =
+          { editProjectModel
+          | showModal = False
+          }
+      in
+        ( { model 
+          | projectModel = newProjectModel
+          , timelogModel = newTimelogModel
+          , editProjectModel = newEditProjectModal
+          }
+        , redirectToProjectsPage model
+        )
+    DeleteProject->
+      ( passToModel 
+        { editProjectModel 
+        | showModal = True
+        }
+        model
+      , Cmd.none
+      )
+    SubmitDeleteProject ->
+      ( passToModel 
+        { editProjectModel 
+        | isPending = True
+        }
+        model
+      , sendDeleteProjectMutation model
+      )
+    CloseFormModal ->
+      ( passToModel 
+        { editProjectModel 
+        | showModal = False
+        }
+        model
+      , Cmd.none
+      )
 
 redirectToProjectsPage : Model -> Cmd Msg
 redirectToProjectsPage model =
@@ -261,28 +330,63 @@ sendUpdateProjectMutation  ({editProjectModel} as model) =
     Nothing ->
       Cmd.none
 
+sendDeleteProjectMutation : Model -> Cmd Msg
+sendDeleteProjectMutation ({editProjectModel} as model) =
+  case editProjectModel.updateForm of 
+    Just form ->
+      sendMutationRequest model.csrf (deleteProjectMutation <| processDeleteProjectInput form.id)
+        |> Task.attempt ReceiveDeleteProjectMutationResponse
+    Nothing ->
+      Cmd.none
+
 view : Model -> Html Msg
 view ({editProjectModel} as model) =
-  H.div 
+  Html.div 
     [] 
-    [ H.div
-      [ A.class "level" ]
-      [ H.div
-        [ A.class "level-left" ]
-        [ H.h2 
-          [ A.class "title" 
+    [ Html.div
+      [ Attributes.class "level" ]
+      [ Html.div
+        [ Attributes.class "level-left" ]
+        [ Html.h2 
+          [ Attributes.class "title" 
           ] 
-          [ H.text "Projects"]
+          [ Html.text "Projects"]
         ]
-      , H.div
-        [ A.class "level-right" ]
-        []
+      , Html.div
+        [ Attributes.class "level-right" ]
+        [ Html.div
+          [ Attributes.class "level-item" ]
+          [ case editProjectModel.updateForm of
+            Just form ->
+              Html.button
+                [ Attributes.class "button is-danger" 
+                , Events.onClick <| DeleteProject
+                ]
+                [ Html.span
+                  [ Attributes.class "icon is-small" ]
+                  [ Html.span
+                    [ Attributes.class "fas fa-times-circle" ]
+                    []
+                  ]
+                , Html.span
+                  []
+                  [ Html.text "Delete" ]
+                ]
+            Nothing ->
+              Html.div [] []
+          ]
         ]
+      ]
     , case editProjectModel.updateForm of
         Just form ->
           updateProjectForm form model
         Nothing ->
-          H.div [] []
+          Html.div [] []
+    , modal 
+        deleteProjectForm
+        model
+        editProjectModel.showModal
+        CancelEdit
     ]
 
 
@@ -292,17 +396,17 @@ updateProjectForm form ({editProjectModel, userModel} as model) =
     button = 
       case editProjectModel.isPending of
         True ->
-          H.button
-            [ A.class "button is-primary is-loading"
-            , A.attribute "disabled" "disabled"
+          Html.button
+            [ Attributes.class "button is-primary is-loading"
+            , Attributes.attribute "disabled" "disabled"
             ]
-            [ H.text "Submit" ]
+            [ Html.text "Submit" ]
         False ->
-          H.button
-            [ A.class "button is-primary"
-            , E.onClick SubmitEditProject
+          Html.button
+            [ Attributes.class "button is-primary"
+            , Events.onClick SubmitEditProject
             ]
-            [ H.text "Submit" ]
+            [ Html.text "Submit" ]
     members =
       List.append editProjectModel.addMembers form.members
         |> List.filter (\user ->
@@ -313,78 +417,70 @@ updateProjectForm form ({editProjectModel, userModel} as model) =
         not (List.member user members)
       ) userModel.users
   in
-    H.div 
+    Html.div 
       []
-      [ H.h3
-        [ A.class "title" ]
-        [ H.text "Update" ]
+      [ Html.h3
+        [ Attributes.class "title" ]
+        [ Html.text "Update" ]
       , formInput "text" "Name" InputUpdateProjectName (Just form.name) Full
       , formInput "text" "Company" InputUpdateProjectCompany (Just form.company) Full
       , formInput "text" "Abbreviation" InputUpdateProjectAbbreviation (Just form.abbreviation) Full
       , formInput "color" "Colour" InputUpdateProjectColour (Just form.colour) Short
       , membersSelect members availableUsers RemoveMembers AddMembers
-      , H.div [ A.class "field" ]
-        [ H.div [ A.class "control" ]
+      , Html.div [ Attributes.class "field" ]
+        [ Html.div [ Attributes.class "control" ]
           [ button
-          , H.button
-            [ A.class "button is-text"
-            , E.onClick CancelEdit
+          , Html.button
+            [ Attributes.class "button is-text"
+            , Events.onClick CancelEdit
             ]
-            [ H.text "Cancel" ]
+            [ Html.text "Cancel" ]
           ]
         ]
       ]
 
--- membersSelect : ProjectWithMembers -> Model -> Html Msg
--- membersSelect form ({editProjectModel, userModel} as model) = 
---   let
---     members =
---       List.append editProjectModel.addMembers form.members
---         |> List.filter (\user ->
---           not (List.member user editProjectModel.removeMembers)
---         )
---     availableUsers = 
---       List.filter (\user ->
---         not (List.member user members)
---       ) userModel.users
---   in
---     H.div
---       []
---       [ H.div
---         []
---         [ H.h4
---           [ A.class "title is-4" ]
---           [ H.text "Assigned" ]
---         , H.div
---           []
---           ( List.map 
---             (\user -> 
---               H.div 
---                 [ E.onClick <| RemoveMembers user ] 
---                 [ H.text <| fullNameString user ]
---             ) 
---             members
---           )
---         ]
---       , H.div 
---         []
---         [ H.h4
---           [ A.class "title is-4" ]
---           [ H.text "Available" ]
---         , if List.isEmpty availableUsers then
---             H.p 
---               [ A.class "subtitle has-text-centered" ] 
---               [ H.text "No users to add" ]
---           else
---             H.div
---               []
---               ( List.map 
---                 (\user -> 
---                   H.div 
---                     [ E.onClick <| AddMembers user ] 
---                     [ H.text <| fullNameString user ]
---                 ) 
---                 availableUsers
---               )
---         ]
---       ]
+deleteProjectForm : Model -> Html Msg
+deleteProjectForm ( {editProjectModel} as model) =
+  let
+    button = 
+      case editProjectModel.isPending of
+        True ->
+          Html.button
+            [ Attributes.class "button is-primary is-loading"
+            , Attributes.attribute "disabled" "disabled"
+            ]
+            [ Html.text "Confirm" ]
+        False ->
+          Html.button
+            [ Attributes.class "button is-primary"
+            , Events.onClick <| SubmitDeleteProject
+            ]
+            [ Html.text "Confirm" ]
+  in
+    Html.div 
+      []
+      [ Html.h3
+        [ Attributes.class "title" ]
+        [ Html.text "Delete" ]
+      , Html.p
+        [ Attributes.class "field" ]
+        [ Html.text "Are you sure you want to delete this project?" ]
+      , Html.p
+        [ Attributes.class "field" ]
+        [ Html.text "You will lose all data associated with this project including the times logged against it" ]
+      , Html.div 
+        [ Attributes.class "field" ]
+        [ Html.div 
+          [ Attributes.class "control" ]
+          [ Html.div
+            [ Attributes.class "buttons" ]
+            [ button
+            , Html.button
+              [ Attributes.class "button is-text"
+              , Events.onClick CloseFormModal
+              ]
+              [ Html.text "Cancel" ]
+            ]
+          ]
+        ]
+      ]

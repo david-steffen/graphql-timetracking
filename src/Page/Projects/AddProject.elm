@@ -1,8 +1,8 @@
 module Page.Projects.AddProject exposing (..)
 
-import Html as H exposing (..)
-import Html.Attributes as A exposing (..)
-import Html.Events as E exposing (..)
+import Html exposing (..)
+import Html.Attributes as Attributes exposing (..)
+import Html.Events as Events exposing (..)
 import Uuid exposing (Uuid)
 import GraphQL.Client.Http as GraphQLClient
 import Types exposing (Model)
@@ -210,16 +210,16 @@ sendCreateProjectMutation  ({addProjectModel} as model) =
 
 view : Model -> Html Msg
 view model =
-  H.div 
+  Html.div 
     [] 
-    [ H.div
-      [ A.class "level" ]
-      [ H.div
-        [ A.class "level-left" ]
-        [ H.h2 
-          [ A.class "title" 
+    [ Html.div
+      [ Attributes.class "level" ]
+      [ Html.div
+        [ Attributes.class "level-left" ]
+        [ Html.h2 
+          [ Attributes.class "title" 
           ] 
-          [ H.text "Projects"]
+          [ Html.text "Projects"]
         ]
       ]
     , createProjectForm model
@@ -231,41 +231,41 @@ createProjectForm ({addProjectModel, userModel} as model) =
     button = 
       case addProjectModel.isPending of
         True ->
-          H.button
-            [ A.class "button is-primary is-loading"
-            , A.attribute "disabled" "disabled"
+          Html.button
+            [ Attributes.class "button is-primary is-loading"
+            , Attributes.attribute "disabled" "disabled"
             ]
-            [ H.text "Submit" ]
+            [ Html.text "Submit" ]
         False ->
-          H.button
-            [ A.class "button is-primary"
-            , E.onClick SubmitCreateProject
+          Html.button
+            [ Attributes.class "button is-primary"
+            , Events.onClick SubmitCreateProject
             ]
-            [ H.text "Submit" ]
+            [ Html.text "Submit" ]
     members = addProjectModel.addMembers
     availableUsers = 
       List.filter (\user ->
         not (List.member user members)
       ) userModel.users
   in
-    H.div 
+    Html.div 
       []
-      [ H.h3
-        [ A.class "title" ]
-        [ H.text "Add" ]
+      [ Html.h3
+        [ Attributes.class "title" ]
+        [ Html.text "Add" ]
       , formInput "text" "Name" InputCreateProjectName Nothing Full
       , formInput "text" "Company" InputCreateProjectCompany Nothing Full
       , formInput "text" "Abbreviation" InputCreateProjectAbbreviation Nothing Full
       , formInput "color" "Colour" InputCreateProjectColour Nothing Short
       , membersSelect members availableUsers RemoveMembers AddMembers
-      , H.div [ A.class "field" ]
-        [ H.div [ A.class "control" ]
+      , Html.div [ Attributes.class "field" ]
+        [ Html.div [ Attributes.class "control" ]
           [ button
-          , H.button
-            [ A.class "button is-text"
-            , E.onClick CancelAdd
+          , Html.button
+            [ Attributes.class "button is-text"
+            , Events.onClick CancelAdd
             ]
-            [ H.text "Cancel" ]
+            [ Html.text "Cancel" ]
           ]
         ]
       ]

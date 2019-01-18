@@ -9,7 +9,6 @@ type alias ProjectModel =
   , projects : Array Project
   , errResult : Maybe String
   , isPending : Bool
-  , deleteId : Maybe Uuid
   }
 
 type alias AddProjectModel =
@@ -25,6 +24,7 @@ type alias EditProjectModel =
   , isPending : Bool
   , addMembers : List User
   , removeMembers : List User
+  , showModal : Bool
   }
 
 type alias Project =
