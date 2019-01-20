@@ -21,7 +21,14 @@ parse string =
         |> List.map (\x -> toInt x |> Maybe.withDefault 0)
         |> Array.fromList
   in 
-    if Array.length timeArray == 3 then
+    if Array.length timeArray == 2 then
+      let
+        hours = parseHours (Array.get 0 timeArray)
+        minutes = parseMinutesOrSeconds (Array.get 1 timeArray)
+        seconds = 0
+      in
+        Ok (Time hours minutes seconds)
+    else if Array.length timeArray == 3 then
       let
         hours = parseHours (Array.get 0 timeArray)
         minutes = parseMinutesOrSeconds (Array.get 1 timeArray)

@@ -9,7 +9,7 @@ from apps.projects.schema import ProjectNode
 class TaskNode(ObjectType):
     id = graphene.UUID()
     project = graphene.Field(ProjectNode, id=graphene.UUID())
-    duration = graphene.types.datetime.Time()
+    duration = TimeDelta()
     description = graphene.String()
     date = graphene.types.datetime.Date()
     logged = graphene.Boolean()
@@ -61,7 +61,7 @@ class Query(object):
 
 class TaskInput(graphene.InputObjectType):
     project = graphene.String(required=True)
-    duration = graphene.types.datetime.Time(required=True)
+    duration = TimeDelta(required=True)
     description = graphene.String(required=True, default_value='')
     date = graphene.types.datetime.DateTime(required=True)
     logged = graphene.Boolean(default_value=True)

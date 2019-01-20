@@ -426,7 +426,7 @@ viewPage model =
 header : Model -> Html Msg
 header model =
     Html.header [ Attributes.class "header" ]
-        [ Html.div [ Attributes.class "container is-fluid" ] [ nav model ]
+        [ Html.div [ Attributes.class "container" ] [ nav model ]
         ]
 
 nav : Model -> Html Msg
@@ -445,36 +445,17 @@ nav model =
       , Html.div
         [ Attributes.classList [ ("navbar-menu", True), ("is-active", model.showMenu) ]
         ]
-        [ Html.ul [ Attributes.class "navbar-start" ]
+        [ Html.div [ Attributes.class "navbar-start" ]
           [ link "/" "Times" route TimelogsR
           , link "/projects" "Projects" route ProjectsR
-          , Html.li 
-            [ Events.onClick Logout ]
-            [ Html.p
-              []
-              [ Html.text "Logout" ]
-            ]
+          , Html.a
+            [ Events.onClick Logout
+            , Attributes.class "navbar-item" ]
+            [ Html.text "Logout" ]
+            
           ]
         ]
       ]
-
-link: String -> String -> Route -> Route -> Html Msg
-link href title_ currentRoute route =
-  let
-    classString = 
-      if currentRoute == route then 
-        "selected"
-      else 
-        ""
-  in
-    Html.li 
-      []
-      [ Html.a
-        [ Attributes.href href 
-        , Attributes.class classString
-        ]
-        [ Html.text title_]
-      ] 
 
 navbarBrand : Bool -> List (Html Msg)
 navbarBrand showMenu =
@@ -483,14 +464,14 @@ navbarBrand showMenu =
     , Attributes.href "/"
     ]
     [ Html.h1
-        [ Attributes.class "title is-1" ]
+        [ Attributes.class "title is-5" ]
         [ Html.span [ Attributes.class "icon is-large" ] [ Html.i [ Attributes.class "far fa-clock" ] [] ]
-        , Html.text "Time Trackr"
+        , Html.text "Cronos"
         ]
     ]
   , Html.div
     [ Attributes.attribute "role" "button"
-    , Attributes.classList [ ("navbar-burger", True), ("is-active", showMenu) ] 
+    , Attributes.classList [ ("navbar-burger burger", True), ("is-active", showMenu) ] 
     , Attributes.attribute "aria-label" "menu" 
     , Attributes.attribute "aria-expanded" "false"
     , Events.onClick ToggleMenu
@@ -509,6 +490,22 @@ navbarBrand showMenu =
       []
     ]
   ]
+
+link: String -> String -> Route -> Route -> Html Msg
+link href title_ currentRoute route =
+  let
+    classString = 
+      if currentRoute == route then 
+        "selected"
+      else 
+        ""
+  in
+    Html.a
+      [ Attributes.href href 
+      , Attributes.class <| "navbar-item " ++ classString
+      ]
+      [ Html.text title_]
+      
  
 alwaysPreventDefault : msg -> ( msg, Bool )
 alwaysPreventDefault msg =
