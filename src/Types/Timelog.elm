@@ -4,7 +4,7 @@ import Array exposing (Array)
 import Uuid exposing (Uuid)
 import Types.Project exposing (Project)
 import Date exposing (Date)
-import Utils.SimpleTime exposing (Time)
+import Utils.TimeDelta exposing (TimeDelta)
 
 type FilterView
   = WeekView
@@ -35,7 +35,7 @@ type alias EditTimelogModel =
 type alias TimelogWithProject =
   { id : Uuid
   , description : String
-  , duration : Time
+  , duration : TimeDelta
   , date : Date
   , project : Project
   }
@@ -43,7 +43,7 @@ type alias TimelogWithProject =
 type alias Timelog =
   { id : Uuid
   , description : String
-  , duration : Time
+  , duration : TimeDelta
   , date : Date
   , project : ProjectRefQuery
   }
@@ -106,7 +106,7 @@ type alias DeleteTimelogInput =
 
 type alias CreateTimelogForm =
   { description : String
-  , duration : Maybe Time
+  , duration : Maybe TimeDelta
   , date : Maybe Date
   , project : String
   }
@@ -114,7 +114,7 @@ type alias CreateTimelogForm =
 type alias UpdateTimelogForm =
   { id : Uuid
   , description : String
-  , duration : Time
+  , duration : TimeDelta
   , date : Date
   , project : Uuid
   }

@@ -15,7 +15,6 @@ import Types.Timelog exposing
   , TimelogMutationResult
   )
 import Types.Project exposing (Project)
-import Utils.SimpleTime as SimpleTime exposing (..)
 import Date exposing (Unit(..), Interval(..), Date)
 import Uuid exposing (Uuid)
 import GraphQL.Client.Http as GraphQLClient
@@ -133,7 +132,7 @@ update msg ({addTimelogModel, timelogModel, projectModel} as model) =
         timelog = hasCreateTimelogForm addTimelogModel.createForm
         newTimelog =
             { timelog
-                | duration = SimpleTime.parse string |> Result.toMaybe
+                | duration = TimeDelta.parse string |> Result.toMaybe
             }
       in
         ( passToModel 

@@ -1,39 +1,59 @@
 {% extends "base.html" %}
 {% block content %}
 
-{% if form.errors %}
-<p>Your username and password didn't match. Please try again.</p>
-{% endif %}
+{% include "header.html" %}
 
-<form method="post" action="{% url 'login' %}">
-    {% csrf_token %}
-    <div class="field">
-        <label class="label">{{ form.username.label }}</label>
-        <div class="control">
-            <input class="input" type="text" name="{{ form.username.html_name }}" value="{{ form.company_name.value }}">
+<section class="section">
+    <div class="container">
+        <h1 class="title">Login</h1>
+        {% if form.errors %}
+        <div class="notification is-danger">
+            <button class="delete"></button>
+            Your username and password didn't match. Please try again.
         </div>
-        {% if form.username.errors %}
-            {% for error in form.username.errors %}
-            <p class="help is-danger">{{ error|escape }}</p>
-            {% endfor %}
         {% endif %}
+
+        <form method="post" action="{% url 'login' %}">
+            {% csrf_token %}
+            <div class="field">
+                <label class="label">{{ form.username.label }}</label>
+                <div class="control has-icons-left has-icons-right">
+                    {% if form.username.value %}
+                        <input class="input" type="email" name="{{ form.username.html_name }}" value="{{ form.username.value }}">
+                    {% else %}
+                        <input class="input" type="email" name="{{ form.username.html_name }}">
+                    {% endif %}
+                    <span class="icon is-small is-left">
+                        <i class="fas fa-envelope"></i>
+                    </span>
+                </div>
+            </div>
+            <div class="field">
+                <label class="label">{{ form.password.label }}</label>
+                <div class="control has-icons-left">
+                    <input class="input" type="password" name="{{ form.password.html_name }}">
+                    <span class="icon is-small is-left">
+                        <i class="fas fa-lock"></i>
+                    </span>
+                </div>
+            </div>
+            <div class="field">
+                <div class="control">
+                    <div class="buttons">
+                        <input class="button is-success" type="submit" value="Login" />
+                        <a href="{% url 'password_reset' %}" class="">Forgot password?</a>
+                    </div>
+                </div>
+            </div>
+            <input type="hidden" name="next" value="{{ next }}" />
+        </form>
+
     </div>
-    <div class="field">
-        <label class="label">{{ form.password.label }}</label>
-        <div class="control">
-            <input class="input" type="password" name="{{ form.password.html_name }}" value="{{ form.company_name.value }}">
-        </div>
-        {% if form.password.errors %}
-            {% for error in form.password.errors %}
-            <p class="help is-danger">{{ error|escape }}</p>
-            {% endfor %}
-        {% endif %}
+</section>
+<section class="section">
+    <div class="container has-text-centered">
+        <h1 class="title is-4">Not registered? Sign up here</h1>
+        <a href="{% url 'register' %}" class="button is-success">Sign up</a>
     </div>
-    <div class="field">
-        <p class="control">
-            <input class="button is-success" type="submit" value="login" />
-        </p>
-    </div>
-    <input type="hidden" name="next" value="{{ next }}" />
-</form>
+</section>
 {% endblock %}

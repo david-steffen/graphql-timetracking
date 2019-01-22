@@ -33,7 +33,6 @@ import Api.Timelog exposing
   )
 import Task
 import Utils.TimeDelta as TimeDelta exposing (TimeDelta)
-import Utils.SimpleTime as SimpleTime exposing (Time)
 import Page exposing (InputLength(..), formInput, formSelect, onClickPreventDefault, onChange, rangeFromDate)
 import Date exposing (Date)
 import Array exposing (..)
@@ -277,7 +276,7 @@ timeLogView projects filterView timelog =
           [ Attributes.class "project-details" ]
           [ Html.div
             [ Attributes.class "has-text-weight-bold is-size-5"]
-            [ Html.text (SimpleTime.toString timelog.duration)
+            [ Html.text (TimeDelta.toString timelog.duration)
             ]
           , Html.div
             []

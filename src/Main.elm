@@ -380,7 +380,7 @@ title route =
         _ ->
           "Home"
   in
-    "Timetrackr - " ++ fragment
+    "Cronos - " ++ fragment
 
 view : Model -> Browser.Document Msg
 view model =

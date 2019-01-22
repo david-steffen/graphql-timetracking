@@ -16,7 +16,6 @@ import Types.Timelog exposing
   , TimelogDeleteMutationResult
   )
 import Types.Project exposing (Project)
-import Utils.SimpleTime as SimpleTime exposing (..)
 import Date exposing (Unit(..), Interval(..), Date)
 import Set exposing (Set)
 import Tuple exposing (..)
@@ -153,7 +152,7 @@ update msg ({editTimelogModel, timelogModel, projectModel} as model) =
       case editTimelogModel.updateForm of 
         Just updateForm ->
           let
-            timeDelta = SimpleTime.parse string |> Result.toMaybe
+            timeDelta = TimeDelta.parse string |> Result.toMaybe
             newTimelog =
               case timeDelta of 
                 Just val ->
@@ -370,7 +369,7 @@ updateTimelogForm form ({editTimelogModel, projectModel} as model) =
       , formTextArea "Description" InputUpdateTimelogDescription (Just form.description) Full
       , formInput "date" "Date" InputUpdateTimelogDate (Just (Date.toIsoString form.date)) Full
       , formSelect (List.map (\project -> {value = Uuid.toString project.id, title = project.name}) (Array.toList projectModel.projects)) InputUpdateTimelogProject ( Just (Uuid.toString form.project)) Full
-      , formInput "time" "Duration" InputUpdateTimelogDuration (Just (SimpleTime.toString form.duration)) Short
+      , formInput "time" "Duration" InputUpdateTimelogDuration (Just (TimeDelta.toString form.duration)) Short
       , Html.div 
         [ Attributes.class "field" ]
         [ Html.div 

@@ -1,6 +1,6 @@
 module Api.Timelog exposing (..)
 
-import Utils.SimpleTime as SimpleTime exposing (..)
+import Utils.TimeDelta as TimeDelta exposing (..)
 import Date exposing (Date)
 import Types.Timelog exposing (Timelog)
 import Types.Project exposing (Project)
@@ -118,7 +118,7 @@ timelogObject =
   object Timelog
     |> with (field "id" [] uuid)
     |> with (field "description" [] string)
-    |> with (field "duration" [] time)
+    |> with (field "duration" [] timeDelta)
     |> with (field "date" [] date)
     |> with (field "project" [] projectRefObject)
 
@@ -165,7 +165,7 @@ convertToCreateTimelogMutation timelog =
     durationString =
       case timelog.duration of
         Just duration ->
-          SimpleTime.toString duration
+          TimeDelta.toString duration
         Nothing ->
           ""
   in
@@ -179,7 +179,7 @@ convertToUpdateTimelogMutation timelog =
     dateString =
       Date.toIsoString timelog.date
     durationString =
-      SimpleTime.toString timelog.duration
+      TimeDelta.toString timelog.duration
     projectId = 
       Uuid.toString timelog.project
   in

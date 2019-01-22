@@ -1,4 +1,4 @@
-module Utils.TimeDelta exposing (TimeDelta, fromString, totalTime, decoder, toString)
+module Utils.TimeDelta exposing (TimeDelta, parse, totalTime, decoder, toString)
 
 import String exposing (split, toInt, fromInt)
 import List exposing (head, take, length, drop, tail)
@@ -28,8 +28,8 @@ type alias TimeDelta =
   }
 
 
-fromString: String -> Result String TimeDelta
-fromString string =
+parse : String -> Result String TimeDelta
+parse string =
   let
     spaceAndColon = 
       Maybe.withDefault Regex.never <|
@@ -118,4 +118,4 @@ toString timeDelta =
 
 decoder : Decoder TimeDelta
 decoder =
-    string |> Decode.andThen (fromString >> JDExtra.fromResult)
+    string |> Decode.andThen (parse >> JDExtra.fromResult)
