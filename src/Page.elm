@@ -1,5 +1,6 @@
 module Page exposing 
   ( InputLength(..)
+  , Direction(..)
   , formInput
   , formSelect
   , formTextArea
@@ -31,6 +32,10 @@ type alias SelectOption =
 type InputLength
   = Short
   | Full
+
+type Direction
+  = Left
+  | Right
 
 onClickPreventDefault : msg -> Attribute msg
 onClickPreventDefault msg =
@@ -222,13 +227,13 @@ rangeFromDate date filterView =
     start =
       case filterView of
         WeekView ->
-          Date.floor Monday date
+          Date.floor Sunday date
         MonthView ->
           Date.floor Month date
     end =
       case filterView of
         WeekView ->
-          Date.ceiling Sunday date
+          Date.ceiling Saturday date
         MonthView ->
           let
             month = Date.add Months 1 date |> Date.floor Month

@@ -22,6 +22,7 @@ import Api.Timelog exposing (timelogsQuery, timelogsRangeWithProjectsQuery, time
 import Api.Project exposing (projectsQuery, projectQuery, editProjectQuery)
 import Api.User exposing (usersQuery)
 import GraphQL.Client.Http as GraphQLClient
+import Http
 import Task exposing (Task)
 import Types exposing (Model, Flags)
 import Types.Timelog exposing (TimelogsRequest, TimelogsWithProjectsRequest, EditTimelogRequest, UpdateTimelogForm)
@@ -64,6 +65,7 @@ init flags url key =
     , userModel = Users.init
     , showMenu = False
     , today = Date.fromPosix utc (millisToPosix 0)
+    , errorMsg = Nothing
     }
 
 
@@ -90,7 +92,9 @@ type Msg
   | ToggleMenu
   | Logout
   | ReceiveDate Date.Date
+  | CloseErrorMessage
   -- | NotFoundMsg NotFound.Msg
+
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -121,8 +125,7 @@ update msg model =
     UserMsg userMsg ->
       stepUser model ( Users.update userMsg model )
     ReceiveTimelogsResponse (Err err) ->
-      Debug.log (Debug.toString err)
-      ( model, Cmd.none ) 
+      ( { model | errorMsg = Just err }, Cmd.none ) 
     ReceiveTimelogsResponse (Ok response) ->
       let
         timelogModel = model.timelogModel
@@ -135,8 +138,7 @@ update msg model =
         , Cmd.none 
         )
     ReceiveTimelogsWithProjectsResponse (Err err) ->
-      Debug.log (Debug.toString err)
-      ( model, Cmd.none ) 
+      ( { model | errorMsg = Just err }, Cmd.none ) 
     ReceiveTimelogsWithProjectsResponse (Ok response) ->
       let
         timelogModel = model.timelogModel
@@ -153,7 +155,14 @@ update msg model =
         , Cmd.none 
         )
     ReceiveEditTimelogResponse (Err err) ->
-      ( model, Cmd.none ) 
+      let
+        editTimelogModel = model.editTimelogModel
+        newTimelogModel = 
+          { editTimelogModel 
+          | isPending = False
+          }
+      in
+        ( { model | errorMsg = Just err, editTimelogModel = newTimelogModel }, Cmd.none ) 
     ReceiveEditTimelogResponse (Ok response) ->
       let
         editTimelogModel = model.editTimelogModel
@@ -167,7 +176,8 @@ update msg model =
             response.timelog.project.id
         newTimelogModel = 
           { editTimelogModel 
-          | updateForm = Just form 
+          | updateForm = Just form
+          , isPending = False
           }
         newProjectModel =
           { projectModel | projects = Array.fromList response.allProjects}
@@ -179,7 +189,7 @@ update msg model =
         , Cmd.none 
         )
     ReceiveProjectsResponse (Err err) ->
-      ( model, Cmd.none ) 
+      ( { model | errorMsg = Just err }, Cmd.none ) 
     ReceiveProjectsResponse (Ok response) ->
       let
         projectModel = model.projectModel
@@ -192,7 +202,7 @@ update msg model =
         , Cmd.none 
         )
     ReceiveProjectResponse (Err err) ->
-      ( model, Cmd.none ) 
+      ( { model | errorMsg = Just err }, Cmd.none ) 
     ReceiveProjectResponse (Ok response) ->
       let
         editProjectModel = model.editProjectModel
@@ -206,7 +216,7 @@ update msg model =
         , Cmd.none 
         )
     ReceiveEditProjectResponse (Err err) ->
-      ( model, Cmd.none ) 
+      ( { model | errorMsg = Just err }, Cmd.none ) 
     ReceiveEditProjectResponse (Ok response) ->
       let
         editProjectModel = model.editProjectModel
@@ -223,7 +233,7 @@ update msg model =
         , Cmd.none 
         )
     ReceiveUsersResponse (Err err) ->
-      ( model, Cmd.none ) 
+      ( { model | errorMsg = Just err }, Cmd.none ) 
     ReceiveUsersResponse (Ok response) ->
       let
         userModel = model.userModel
@@ -257,6 +267,9 @@ update msg model =
           else
             sendTimeLogsWithProjectsQuery model.csrf today model.timelogModel.filterView ReceiveTimelogsWithProjectsResponse
           )
+    CloseErrorMessage ->
+      ( { model | errorMsg = Nothing }, Cmd.none ) 
+
 
 
 stepTimelog : Model -> ( Model, Cmd Timelogs.Msg ) -> ( Model, Cmd Msg )
@@ -326,7 +339,12 @@ initTimelogPage =
   Date.today |> Task.perform ReceiveDate
 
 handleRoute : Model -> ( Model, Cmd Msg )
-handleRoute ({ timelogModel, projectModel, csrf } as model) =
+handleRoute (
+  { timelogModel
+  , projectModel
+  , editTimelogModel
+  , csrf 
+  } as model) =
   let
     route = Route.fromUrl model.url
   in
@@ -334,8 +352,6 @@ handleRoute ({ timelogModel, projectModel, csrf } as model) =
       TimelogsR ->
         if timelogModel.readyTimes then
           ( model, Cmd.none )
-        -- else if projectModel.readyProjects then
-        --   ( model, sendTimeLogsQuery csrf )
         else
           ( model, initTimelogPage )
       AddTimelogR ->
@@ -344,7 +360,13 @@ handleRoute ({ timelogModel, projectModel, csrf } as model) =
         else
           ( model, sendProjectsQuery csrf )
       EditTimelogR uuid ->
-        ( model, sendEditTimelogQuery csrf uuid ReceiveEditTimelogResponse)
+        let
+          newEditTimelogModel =
+            { editTimelogModel
+            | isPending = True
+            }
+        in
+          ( { model | editTimelogModel = newEditTimelogModel }, sendEditTimelogQuery csrf uuid ReceiveEditTimelogResponse)
       ProjectsR ->
         if projectModel.readyProjects then
           ( model, Cmd.none )
@@ -373,8 +395,16 @@ title route =
       case route of
         TimelogsR ->
           "Times"
+        AddTimelogR ->
+          "Add new time"
+        EditTimelogR id ->
+          "Edit time"
         ProjectsR ->
           "Projects"
+        AddProjectR ->
+          "Add new project"
+        EditProjectR id ->
+          "Edit project"
         AboutR ->
           "About me"
         _ ->
@@ -398,8 +428,48 @@ view model =
             [ Attributes.class "container" ]
             [ viewPage model ]
           ]
+        , case model.errorMsg of 
+            Just errors ->
+              errorMessages errors
+            Nothing ->
+              Html.div [] []
         ]
     }
+
+errorMessages : GraphQLClient.Error -> Html Msg
+errorMessages errors =
+  case errors of
+    GraphQLClient.HttpError httpError ->
+      case httpError of
+        Http.BadUrl string ->
+          errorMessageView string
+        Http.Timeout ->
+          errorMessageView "Connection timed out"
+        Http.NetworkError ->
+          errorMessageView "There's a problem with the network. Please check your connection"
+        Http.BadStatus response ->
+          errorMessageView response.body
+        Http.BadPayload string response ->
+          errorMessageView response.body
+        -- _ ->
+        --   errorMessageView "Something went wrong"
+
+
+    GraphQLClient.GraphQLError graphQLErrors ->
+      Html.div [] <| List.map (\x -> errorMessageView x.message) graphQLErrors
+           
+
+
+errorMessageView errorString =
+  Html.div
+    [ Attributes.class "notification is-danger"]
+    [ Html.button 
+      [ Attributes.class "delete"
+      , Events.onClick CloseErrorMessage
+      ]
+      []
+    , Html.text errorString 
+    ]
 
 viewPage : Model -> Html Msg
 viewPage model = 

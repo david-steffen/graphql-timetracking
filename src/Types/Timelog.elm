@@ -5,6 +5,7 @@ import Uuid exposing (Uuid)
 import Types.Project exposing (Project)
 import Date exposing (Date)
 import Utils.TimeDelta exposing (TimeDelta)
+import DonutChart exposing (Model)
 
 type FilterView
   = WeekView
@@ -17,6 +18,7 @@ type alias TimelogModel =
   , isPending : Bool
   , filterView : FilterView
   , filterDate : Date
+  , donutChartData : DonutChart.Model
   }
 
 type alias AddTimelogModel =

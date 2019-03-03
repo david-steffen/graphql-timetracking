@@ -62,12 +62,16 @@ update msg ({addTimelogModel, timelogModel, projectModel} as model) =
         )
     ReceiveCreateTimelogMutationResponse (Err err) ->
       let
+        newModel = 
+          { model
+          | errorMsg = Just err
+          }
         newTimelogModel = 
           { addTimelogModel
           | isPending = False
           }  
       in
-        ( passToModel newTimelogModel model
+        ( passToModel newTimelogModel newModel
         , Cmd.none
         )
     ReceiveCreateTimelogMutationResponse (Ok response) ->

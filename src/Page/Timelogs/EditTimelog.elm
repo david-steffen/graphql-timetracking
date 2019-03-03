@@ -62,12 +62,16 @@ update msg ({editTimelogModel, timelogModel, projectModel} as model) =
   case msg of
     ReceiveUpdateTimelogMutationResponse (Err err) ->
       let
+        newModel = 
+          { model
+          | errorMsg = Just err
+          }
         newTimelogModel = 
           { editTimelogModel 
           | isPending = False
           }  
       in
-        ( passToModel newTimelogModel model
+        ( passToModel newTimelogModel newModel
         , Cmd.none
         )
     ReceiveUpdateTimelogMutationResponse (Ok response) ->
@@ -192,12 +196,16 @@ update msg ({editTimelogModel, timelogModel, projectModel} as model) =
           ( model, Cmd.none )
     ReceiveDeleteTimelogMutationResponse (Err err) ->
       let
+        newModel = 
+          { model
+          | errorMsg = Just err
+          }
         newEditTimelogModel = 
           { editTimelogModel 
           | isPending = False
           }  
       in
-        ( passToModel newEditTimelogModel model
+        ( passToModel newEditTimelogModel newModel
         , Cmd.none
         )
     ReceiveDeleteTimelogMutationResponse (Ok response) ->
@@ -334,7 +342,16 @@ view ({editTimelogModel} as model) =
         Just form ->
           updateTimelogForm form model
         Nothing ->
-          Html.div [] []
+          case editTimelogModel.isPending of 
+            False ->
+              Html.div 
+                []
+                [ Html.h3
+                  [ Attributes.class "title is-5 has-text-centered" ]
+                  [ Html.text "No time log to edit" ]
+                ]
+            True -> 
+              Html.div [] []
     , modal 
         deleteTimelogForm
         model

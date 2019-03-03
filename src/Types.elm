@@ -7,6 +7,7 @@ import Types.Timelog exposing (TimelogModel, AddTimelogModel, EditTimelogModel)
 import Types.Project exposing (ProjectModel, AddProjectModel, EditProjectModel)
 import Types.User exposing (UserModel)
 import Date exposing (Date)
+import GraphQL.Client.Http as GraphQLClient
 
 type alias Model =
   { key : Nav.Key
@@ -21,6 +22,7 @@ type alias Model =
   , userModel : UserModel
   , showMenu : Bool
   , today : Date
+  , errorMsg : Maybe GraphQLClient.Error
   }
 
 type alias Flags =

@@ -4,15 +4,13 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.contrib import messages
 from apps.client.forms import RegisterForm
 
+
 # Create your views here.
 @login_required
 @ensure_csrf_cookie
 def index(request):
     return render(request, 'times/index.html')
 
-
-# def login(request):
-#     return render(request, 'account/login.html')
 
 def register(request):
     if request.method == 'POST':

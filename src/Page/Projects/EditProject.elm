@@ -63,12 +63,16 @@ update msg ({ timelogModel, projectModel, editProjectModel } as model) =
   case msg of
     ReceiveUpdateProjectMutationResponse (Err err) ->
       let
+        newModel = 
+          { model
+          | errorMsg = Just err
+          }
         newProjectModel = 
           { editProjectModel 
           | isPending = False
           }  
       in
-        ( passToModel newProjectModel model
+        ( passToModel newProjectModel newModel
         , Cmd.none
         )
     ReceiveUpdateProjectMutationResponse (Ok response) ->
@@ -249,13 +253,17 @@ update msg ({ timelogModel, projectModel, editProjectModel } as model) =
         , Cmd.none)
     ReceiveDeleteProjectMutationResponse (Err err) ->
       let
+        newModel = 
+          { model
+          | errorMsg = Just err
+          }
         newProjectModel = 
           { editProjectModel 
           | isPending = False
           , showModal = False
           }  
       in
-        ( passToModel newProjectModel model
+        ( passToModel newProjectModel newModel
         , Cmd.none
         )
     ReceiveDeleteProjectMutationResponse (Ok response) ->

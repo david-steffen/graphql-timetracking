@@ -65,12 +65,16 @@ update msg ({ addProjectModel, projectModel } as model) =
         )
     ReceiveCreateProjectMutationResponse (Err err) ->
       let
+        newModel = 
+          { model
+          | errorMsg = Just err
+          }
         newProjectModel = 
           { addProjectModel
           | isPending = False
           }  
       in
-        ( passToModel newProjectModel model
+        ( passToModel newProjectModel newModel
         , Cmd.none
         )
     ReceiveCreateProjectMutationResponse (Ok response) ->
