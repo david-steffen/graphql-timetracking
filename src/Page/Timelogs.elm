@@ -37,7 +37,7 @@ import Page exposing (Direction(..), formInput, formSelect, onClickPreventDefaul
 import Date exposing (Date)
 import Array exposing (..)
 import Time exposing (millisToPosix, utc)
-import DonutChart exposing (Msg(..))
+import DonutChart exposing (Msg(..), Point)
 
 init : TimelogModel
 init =
@@ -81,19 +81,7 @@ update msg ({timelogModel, projectModel} as model) =
     ReceiveTimelogQueryResponse (Ok response) ->
       let
         newTimelogs = Array.fromList response.allTimelogs
-        donutChartList = Array.toList <| Array.map 
-          (\timelog -> 
-            let
-              projectFiltered = List.filter (\x -> x.id == timelog.project.id) (Array.toList projectModel.projects)
-              project =
-                List.head projectFiltered
-                  |> Maybe.withDefault (Project timelog.project.id "" "" "" "")
-            in
-              { time = TimeDelta.toFloat timelog.duration
-              , color = project.colour
-              }
-          ) 
-          newTimelogs
+        donutChartList = donutChartPoints newTimelogs projectModel.projects
 
         donutChartData = timelogModel.donutChartData
     
@@ -167,7 +155,21 @@ update msg ({timelogModel, projectModel} as model) =
             )
           )
 
-
+donutChartPoints : Array Timelog -> Array Project -> List Point
+donutChartPoints timelogs projects = 
+  Array.toList <| Array.map 
+    (\timelog -> 
+      let
+        projectFiltered = List.filter (\x -> x.id == timelog.project.id) (Array.toList projects)
+        project =
+          List.head projectFiltered
+            |> Maybe.withDefault (Project timelog.project.id "" "" "" "")
+      in
+        { time = TimeDelta.toFloat timelog.duration
+        , color = project.colour
+        }
+    ) 
+    timelogs
 
 updateDate : Unit -> Int -> Model -> ( Model, Cmd Msg )
 updateDate unit value ({timelogModel} as model) = 
