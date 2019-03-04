@@ -3,7 +3,8 @@ module Page.Timelogs exposing (..)
 import Html exposing (..)
 import Html.Attributes as Attributes exposing (..)
 import Html.Events as Events exposing (..)
-import Types exposing (Model)
+import Types exposing (Model, Flags)
+import Url
 import Types.Timelog exposing 
   ( Timelog
   , TimelogModel
@@ -36,27 +37,52 @@ import Utils.TimeDelta as TimeDelta exposing (TimeDelta)
 import Page exposing (InputLength(..), formInput, formSelect, onClickPreventDefault, onChange, rangeFromDate)
 import Date exposing (Date)
 import Array exposing (..)
+import Browser.Navigation as Nav
+import Route exposing (..)
 import Time exposing (millisToPosix, utc)
 
-init : TimelogModel
-init =
-  { readyTimes = False
-  , timelogs = Array.empty
-  , errResult = Nothing
-  , isPending = False
-  , filterView = WeekView
-  , filterDate = Date.fromPosix utc (millisToPosix 0)
-  }
-
+init : Flags -> Url.Url -> Nav.Key -> ( TimelogModel, Cmd Msg )
+init flags url key =
+  let 
+    route = Route.fromUrl url
+  in
+  ( { readyTimes = False
+    , timelogs = Array.empty
+    , errResult = Nothing
+    , isPending = False
+    , filterView = WeekView
+    , filterDate = Date.fromPosix utc (millisToPosix 0)
+    }
+  , case route of
+      TimelogsR ->
+        Date.today |> Task.perform ReceiveDate
+      _ ->
+        Cmd.none
+  )
 
 type Msg
   = ReceiveTimelogQueryResponse (Result GraphQLClient.Error TimelogsRequest)
+  | ReceiveTimelogsWithProjectsResponse (Result GraphQLClient.Error TimelogsWithProjectsRequest)
   | ChangeView String
   | SetDate String
+  | ReceiveDate Date.Date
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ({timelogModel, projectModel} as model) =
   case msg of
+    ReceiveDate today ->
+      let
+        newTimelogModel = 
+          { timelogModel
+          | filterDate = today 
+          }
+      in
+        ( { model | today = today, timelogModel = newTimelogModel }
+        , if projectModel.readyProjects then
+            sendTimeLogsQuery model.flags.csrftoken today timelogModel.filterView
+          else
+            sendTimeLogsWithProjectsQuery model.flags.csrftoken today timelogModel.filterView
+          )
     ReceiveTimelogQueryResponse (Err err) ->
       let
         newTimelogModel = 
@@ -78,6 +104,21 @@ update msg ({timelogModel, projectModel} as model) =
         ( passToModel newTimelogModel model
         , Cmd.none
         )
+    ReceiveTimelogsWithProjectsResponse (Err err) ->
+      ( model, Cmd.none ) 
+    ReceiveTimelogsWithProjectsResponse (Ok response) ->
+      let
+        newTimelogModel = 
+          { timelogModel | timelogs = Array.fromList response.allTimelogs, readyTimes = True }
+        newProjectModel = 
+          { projectModel | projects = Array.fromList response.allProjects, readyProjects = True }
+      in
+        ( { model
+          | timelogModel = newTimelogModel
+          , projectModel = newProjectModel
+          }
+        , Cmd.none 
+        )
     ChangeView filterViewString ->
       let
         filterView = 
@@ -91,7 +132,7 @@ update msg ({timelogModel, projectModel} as model) =
           | filterView = filterView 
           }
           model
-        , sendTimeLogsQuery model.csrf timelogModel.filterDate filterView ReceiveTimelogQueryResponse
+        , sendTimeLogsQuery model.flags.csrftoken timelogModel.filterDate filterView
         )
     SetDate dateString ->
       let
@@ -108,7 +149,7 @@ update msg ({timelogModel, projectModel} as model) =
           | filterDate = newDate
           }
           model
-        , sendTimeLogsQuery model.csrf newDate timelogModel.filterView ReceiveTimelogQueryResponse
+        , sendTimeLogsQuery model.flags.csrftoken newDate timelogModel.filterView
       )
 
 passToModel : TimelogModel -> Model -> Model
@@ -116,21 +157,21 @@ passToModel timelogModel model =
   { model | timelogModel = timelogModel }
    
 
-sendTimeLogsQuery : String -> Date.Date -> FilterView -> (Result GraphQLClient.Error TimelogsRequest -> msg) -> Cmd msg
-sendTimeLogsQuery csrf date filterView msg =
+sendTimeLogsQuery : String -> Date.Date -> FilterView -> Cmd Msg
+sendTimeLogsQuery csrf date filterView =
   let
     (start, end) = rangeFromDate date filterView
   in
     sendQueryRequest csrf (timelogsRangeQuery start end)
-      |> Task.attempt msg
+      |> Task.attempt ReceiveTimelogQueryResponse
 
-sendTimeLogsWithProjectsQuery : String -> Date.Date -> FilterView -> (Result GraphQLClient.Error TimelogsWithProjectsRequest -> msg) -> Cmd msg
-sendTimeLogsWithProjectsQuery csrf date filterView msg =
+sendTimeLogsWithProjectsQuery : String -> Date.Date -> FilterView -> Cmd Msg
+sendTimeLogsWithProjectsQuery csrf date filterView =
   let
     (start, end) = rangeFromDate date filterView
   in
     sendQueryRequest csrf (timelogsRangeWithProjectsQuery start end)
-      |> Task.attempt msg
+      |> Task.attempt ReceiveTimelogsWithProjectsResponse
     
 view : Model -> Html Msg
 view ({timelogModel} as model) =

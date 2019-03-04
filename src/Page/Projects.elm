@@ -5,37 +5,69 @@ import Html.Attributes as Attributes exposing (..)
 import Html.Events as Events exposing (..)
 import Date exposing (..)
 import Uuid exposing (Uuid)
-import Types exposing (Model)
+import Types exposing (Model, Flags)
+import Url
 import GraphQL.Client.Http as GraphQLClient
 import Types.Project exposing 
   ( Project
   , ProjectModel
   , CreateProjectForm
+  , ProjectsRequest
   )
+import Api exposing (sendQueryRequest)
+import Api.Project exposing (projectsQuery)
 import Task
-
+import Browser.Navigation as Nav
 import Array exposing (Array)
+import Route exposing (..)
 
 
-init : ProjectModel
-init =
-  { readyProjects = False
-  , projects = Array.empty
-  , errResult = Nothing
-  , isPending = False
-  }
+init : Flags -> Url.Url -> Nav.Key -> ( ProjectModel, Cmd Msg )
+init flags url key =
+  let 
+    route = Route.fromUrl url
+  in
+  ( { readyProjects = False
+    , projects = Array.empty
+    , errResult = Nothing
+    , isPending = False
+    }
+  , case route of 
+    ProjectsR ->
+      sendProjectsQuery flags.csrftoken
+    _ -> 
+      Cmd.none
+  )
 
 type Msg  
-  = None
+  = ReceiveProjectsResponse (Result GraphQLClient.Error ProjectsRequest)
+
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg ({ timelogModel, projectModel } as model) =
-  (model, Cmd.none)
+update msg ({ timelogModel, projectModel, flags } as model) =
+  case msg of
+    ReceiveProjectsResponse (Err err) ->
+      ( model, Cmd.none ) 
+    ReceiveProjectsResponse (Ok response) ->
+      let
+        newProjectModel = 
+          { projectModel | projects = Array.fromList response.allProjects, readyProjects = True }
+      in
+        ( { model
+          | projectModel = newProjectModel
+          }
+        , Cmd.none 
+        )
 
 
 passToModel : ProjectModel -> Model -> Model
 passToModel projectModel model =
   { model | projectModel = projectModel }
+
+sendProjectsQuery : String -> Cmd Msg
+sendProjectsQuery csrf =
+  sendQueryRequest csrf projectsQuery
+    |> Task.attempt ReceiveProjectsResponse
 
 view : Model -> Html Msg
 view model =

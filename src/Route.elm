@@ -11,7 +11,7 @@ type Route
   | ProjectsR
   | AddProjectR
   | EditProjectR Uuid
-  | AboutR
+  | UsersR
   | NotFoundR
 
 routeParser : Parser (Route -> a) a
@@ -23,7 +23,8 @@ routeParser =
     , map ProjectsR  (s "projects")
     , map AddProjectR  (s "projects" </> s "add")
     , map EditProjectR  (s "projects" </> s "edit" </> uuid)
-    , map AboutR     (s "about")
+    , map UsersR     (s "users")
+    , map NotFoundR (s "404")
     ]
 
 

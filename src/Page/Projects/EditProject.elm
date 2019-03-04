@@ -5,13 +5,15 @@ import Html.Attributes as Attributes exposing (..)
 import Html.Events as Events exposing (..)
 import Uuid exposing (Uuid)
 import GraphQL.Client.Http as GraphQLClient
-import Types exposing (Model)
+import Types exposing (Model, Flags)
+import Url
 import Types.Project exposing 
   ( Project
   , ProjectWithMembers
   , EditProjectModel
   , ProjectMutationResult
   , ProjectDeleteMutationResult
+  , EditProjectRequest
   )
 import Types.User exposing (User)
 import Task
@@ -22,28 +24,40 @@ import Page exposing
   , membersSelect
   , modal
   )
-import Api exposing (sendMutationRequest)
+import Api exposing (sendQueryRequest, sendMutationRequest)
 import Api.Project exposing 
-  ( updateProjectMutation
+  ( editProjectQuery
+  , updateProjectMutation
   , deleteProjectMutation
   , processUpdateProjectInput
   , processDeleteProjectInput
   )
 import Array exposing (Array)
 import Browser.Navigation as Nav
+import Route exposing (..)
 
-init : EditProjectModel
-init =
-  { errResult = Nothing
-  , updateForm = Nothing
-  , isPending = False
-  , addMembers = []
-  , removeMembers = []
-  , showModal = False
-  }
+init : Flags -> Url.Url -> Nav.Key -> ( EditProjectModel, Cmd Msg )
+init flags url key =
+  let 
+    route = Route.fromUrl url
+  in
+  ( { errResult = Nothing
+    , updateForm = Nothing
+    , isPending = False
+    , addMembers = []
+    , removeMembers = []
+    , showModal = False
+    }
+  , case route of
+      EditProjectR uuid ->
+        sendEditProjectQuery flags.csrftoken uuid
+      _ ->
+        Cmd.none
+  )
 
 type Msg  
   = SubmitEditProject
+  | ReceiveEditProjectResponse (Result GraphQLClient.Error EditProjectRequest)
   | ReceiveUpdateProjectMutationResponse (Result GraphQLClient.Error ProjectMutationResult)
   | InputUpdateProjectName String
   | InputUpdateProjectAbbreviation String
@@ -59,8 +73,23 @@ type Msg
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg ({ timelogModel, projectModel, editProjectModel } as model) =
+update msg ({ timelogModel, projectModel, editProjectModel, userModel } as model) =
   case msg of
+    ReceiveEditProjectResponse (Err err) ->
+      ( model, Cmd.none ) 
+    ReceiveEditProjectResponse (Ok response) ->
+      let
+        newProjectModel = 
+          { editProjectModel | updateForm = Just response.project }
+        newUserModel =
+          { userModel | users = response.allUsers}
+      in
+        ( { model
+          | editProjectModel = newProjectModel
+          , userModel = newUserModel
+          }
+        , Cmd.none 
+        )
     ReceiveUpdateProjectMutationResponse (Err err) ->
       let
         newProjectModel = 
@@ -317,12 +346,16 @@ passToModel : EditProjectModel -> Model -> Model
 passToModel projectModel model =
   { model | editProjectModel = projectModel }
 
+sendEditProjectQuery : String -> Uuid -> Cmd Msg
+sendEditProjectQuery csrf uuid =
+  sendQueryRequest csrf (editProjectQuery uuid)
+    |> Task.attempt ReceiveEditProjectResponse
 
 sendUpdateProjectMutation : Model -> Cmd Msg
 sendUpdateProjectMutation  ({editProjectModel} as model) =
   case editProjectModel.updateForm of 
     Just updateForm ->
-      sendMutationRequest model.csrf 
+      sendMutationRequest model.flags.csrftoken
         ( updateProjectMutation 
           <| processUpdateProjectInput updateForm editProjectModel.addMembers editProjectModel.removeMembers
         )
@@ -334,7 +367,7 @@ sendDeleteProjectMutation : Model -> Cmd Msg
 sendDeleteProjectMutation ({editProjectModel} as model) =
   case editProjectModel.updateForm of 
     Just form ->
-      sendMutationRequest model.csrf (deleteProjectMutation <| processDeleteProjectInput form.id)
+      sendMutationRequest model.flags.csrftoken (deleteProjectMutation <| processDeleteProjectInput form.id)
         |> Task.attempt ReceiveDeleteProjectMutationResponse
     Nothing ->
       Cmd.none

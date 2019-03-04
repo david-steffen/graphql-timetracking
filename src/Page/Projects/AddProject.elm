@@ -5,7 +5,8 @@ import Html.Attributes as Attributes exposing (..)
 import Html.Events as Events exposing (..)
 import Uuid exposing (Uuid)
 import GraphQL.Client.Http as GraphQLClient
-import Types exposing (Model)
+import Types exposing (Model, Flags)
+import Url
 import Types.Project exposing 
   ( Project
   , ProjectModel
@@ -30,13 +31,15 @@ import Array exposing (Array)
 import Browser.Navigation as Nav
 
 
-init : AddProjectModel
-init =
-  { errResult = Nothing
-  , createForm = Nothing
-  , isPending = False
-  , addMembers = []
-  }
+init : Flags -> Url.Url -> Nav.Key -> ( AddProjectModel, Cmd Msg )
+init flags url key =
+  ( { errResult = Nothing
+    , createForm = Nothing
+    , isPending = False
+    , addMembers = []
+    }
+  , Cmd.none
+  )
 
 type Msg  
   = SubmitCreateProject
@@ -203,7 +206,7 @@ sendCreateProjectMutation : Model -> Cmd Msg
 sendCreateProjectMutation  ({addProjectModel} as model) =
   case addProjectModel.createForm of 
     Just createForm ->
-      sendMutationRequest model.csrf (createProjectMutation <| processCreateProjectInput createForm addProjectModel.addMembers)
+      sendMutationRequest model.flags.csrftoken (createProjectMutation <| processCreateProjectInput createForm addProjectModel.addMembers)
         |> Task.attempt ReceiveCreateProjectMutationResponse
     Nothing ->
       Cmd.none

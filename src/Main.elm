@@ -17,16 +17,8 @@ import Page.Users as Users exposing (..)
 import Page.About as About exposing (..)
 import Page.NotFound as NotFound exposing (..)
 import Json.Decode as JD exposing (..)
-import Api exposing (sendQueryRequest)
-import Api.Timelog exposing (timelogsQuery, timelogsRangeWithProjectsQuery, timelogsWithProjectsQuery, editTimelogQuery)
-import Api.Project exposing (projectsQuery, projectQuery, editProjectQuery)
-import Api.User exposing (usersQuery)
-import GraphQL.Client.Http as GraphQLClient
 import Task exposing (Task)
 import Types exposing (Model, Flags)
-import Types.Timelog exposing (TimelogsRequest, TimelogsWithProjectsRequest, EditTimelogRequest, UpdateTimelogForm)
-import Types.Project exposing (Project, ProjectWithMembers, ProjectsRequest, EditProjectRequest)
-import Types.User exposing (User, UsersRequest)
 import Array exposing (Array)
 import Uuid exposing (Uuid)
 import Date exposing (Unit(..), Interval(..))
@@ -51,20 +43,40 @@ main =
 
 init : Flags -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
-  handleRoute
-    { key = key
-    , url = url
-    , csrf = flags.csrftoken
-    , timelogModel = Timelogs.init
-    , addTimelogModel = AddTimelog.init
-    , editTimelogModel = EditTimelog.init
-    , projectModel = Projects.init
-    , addProjectModel = AddProject.init
-    , editProjectModel = EditProject.init
-    , userModel = Users.init
-    , showMenu = False
-    , today = Date.fromPosix utc (millisToPosix 0)
-    }
+  let
+    (timelogModel, timelogCmd) = Timelogs.init flags url key
+    (addTimelogModel, addTimelogCmd) = AddTimelog.init flags url key
+    (editTimelogModel, editTimelogCmd) = EditTimelog.init flags url key
+    (projectModel, projectCmd) = Projects.init flags url key
+    (addProjectModel, addProjectCmd) = AddProject.init flags url key
+    (editProjectModel, editProjectCmd) = EditProject.init flags url key
+    (userModel, userCmd) = Users.init flags url key
+    route = Route.fromUrl url
+  in
+  -- handleRoute
+    ( { key = key
+      , url = url
+      , flags = flags
+      , timelogModel = timelogModel
+      , addTimelogModel = addTimelogModel
+      , editTimelogModel = editTimelogModel
+      , projectModel = projectModel
+      , addProjectModel = addProjectModel
+      , editProjectModel = editProjectModel
+      , userModel = userModel
+      , showMenu = False
+      , today = Date.fromPosix utc (millisToPosix 0)
+      }
+    , Cmd.batch 
+      [ Cmd.map TimelogMsg timelogCmd
+      , Cmd.map AddTimelogMsg addTimelogCmd
+      , Cmd.map EditTimelogMsg editTimelogCmd
+      , Cmd.map ProjectMsg projectCmd
+      , Cmd.map AddProjectMsg addProjectCmd
+      , Cmd.map EditProjectMsg editProjectCmd
+      , Cmd.map UserMsg userCmd
+      ]
+    )
 
 
 -- UPDATE
@@ -80,16 +92,8 @@ type Msg
   | AddProjectMsg AddProject.Msg
   | EditProjectMsg EditProject.Msg
   | UserMsg Users.Msg
-  | ReceiveTimelogsResponse (Result GraphQLClient.Error TimelogsRequest)
-  | ReceiveTimelogsWithProjectsResponse (Result GraphQLClient.Error TimelogsWithProjectsRequest)
-  | ReceiveEditTimelogResponse (Result GraphQLClient.Error EditTimelogRequest)
-  | ReceiveProjectsResponse (Result GraphQLClient.Error ProjectsRequest)
-  | ReceiveProjectResponse (Result GraphQLClient.Error ProjectWithMembers)
-  | ReceiveEditProjectResponse (Result GraphQLClient.Error EditProjectRequest)
-  | ReceiveUsersResponse (Result GraphQLClient.Error UsersRequest)
   | ToggleMenu
   | Logout
-  | ReceiveDate Date.Date
   -- | NotFoundMsg NotFound.Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -105,135 +109,54 @@ update msg model =
 
     UrlChanged url ->
       handleRoute { model | url = url }
-
     TimelogMsg timelogMsg ->
-      stepTimelog model ( Timelogs.update timelogMsg model )
+      let
+        ( newModel, timelogCmd ) = Timelogs.update timelogMsg model
+      in
+        ( newModel
+        , Cmd.map TimelogMsg timelogCmd
+        )
     AddTimelogMsg addTimelogMsg ->
-      stepAddTimelog model ( AddTimelog.update addTimelogMsg model )
+      let
+        ( newModel, addTimelogCmd ) = AddTimelog.update addTimelogMsg model
+      in
+        ( newModel
+        , Cmd.map AddTimelogMsg addTimelogCmd
+        )
     EditTimelogMsg editTimelogMsg ->
-      stepEditTimelog model ( EditTimelog.update editTimelogMsg model )
+      let
+        ( newModel, editTimelogCmd ) = EditTimelog.update editTimelogMsg model
+      in
+        ( newModel
+        , Cmd.map EditTimelogMsg editTimelogCmd
+        )
     ProjectMsg projectMsg ->
-      stepProject model ( Projects.update projectMsg model )
+      let
+        ( newModel, projectCmd ) = Projects.update projectMsg model
+      in
+        ( newModel
+        , Cmd.map ProjectMsg projectCmd
+        )
     AddProjectMsg addProjectMsg ->
-      stepAddProject model ( AddProject.update addProjectMsg model )
+      let
+        ( newModel, addProjectCmd ) = AddProject.update addProjectMsg model
+      in
+        ( newModel
+        , Cmd.map AddProjectMsg addProjectCmd
+        )
     EditProjectMsg editProjectMsg ->
-      stepEditProject model ( EditProject.update editProjectMsg model )
+      let
+        ( newModel, editProjectCmd ) = EditProject.update editProjectMsg model
+      in
+        ( newModel
+        , Cmd.map EditProjectMsg editProjectCmd
+        )
     UserMsg userMsg ->
-      stepUser model ( Users.update userMsg model )
-    ReceiveTimelogsResponse (Err err) ->
-      Debug.log (Debug.toString err)
-      ( model, Cmd.none ) 
-    ReceiveTimelogsResponse (Ok response) ->
       let
-        timelogModel = model.timelogModel
-        newTimelogModel = 
-          { timelogModel | timelogs = Array.fromList response.allTimelogs, readyTimes = True }
+        ( newModel, userCmd ) = Users.update userMsg model
       in
-        ( { model
-          | timelogModel = newTimelogModel
-          }
-        , Cmd.none 
-        )
-    ReceiveTimelogsWithProjectsResponse (Err err) ->
-      Debug.log (Debug.toString err)
-      ( model, Cmd.none ) 
-    ReceiveTimelogsWithProjectsResponse (Ok response) ->
-      let
-        timelogModel = model.timelogModel
-        newTimelogModel = 
-          { timelogModel | timelogs = Array.fromList response.allTimelogs, readyTimes = True }
-        projectModel = model.projectModel
-        newProjectModel = 
-          { projectModel | projects = Array.fromList response.allProjects, readyProjects = True }
-      in
-        ( { model
-          | timelogModel = newTimelogModel
-          , projectModel = newProjectModel
-          }
-        , Cmd.none 
-        )
-    ReceiveEditTimelogResponse (Err err) ->
-      ( model, Cmd.none ) 
-    ReceiveEditTimelogResponse (Ok response) ->
-      let
-        editTimelogModel = model.editTimelogModel
-        projectModel = model.projectModel
-        form = 
-          UpdateTimelogForm 
-            response.timelog.id 
-            response.timelog.description 
-            response.timelog.duration
-            response.timelog.date
-            response.timelog.project.id
-        newTimelogModel = 
-          { editTimelogModel 
-          | updateForm = Just form 
-          }
-        newProjectModel =
-          { projectModel | projects = Array.fromList response.allProjects}
-      in
-        ( { model
-          | editTimelogModel = newTimelogModel
-          , projectModel = newProjectModel
-          }
-        , Cmd.none 
-        )
-    ReceiveProjectsResponse (Err err) ->
-      ( model, Cmd.none ) 
-    ReceiveProjectsResponse (Ok response) ->
-      let
-        projectModel = model.projectModel
-        newProjectModel = 
-          { projectModel | projects = Array.fromList response.allProjects, readyProjects = True }
-      in
-        ( { model
-          | projectModel = newProjectModel
-          }
-        , Cmd.none 
-        )
-    ReceiveProjectResponse (Err err) ->
-      ( model, Cmd.none ) 
-    ReceiveProjectResponse (Ok response) ->
-      let
-        editProjectModel = model.editProjectModel
-
-        newProjectModel = 
-          { editProjectModel | updateForm = Just response }
-      in
-        ( { model
-          | editProjectModel = newProjectModel
-          }
-        , Cmd.none 
-        )
-    ReceiveEditProjectResponse (Err err) ->
-      ( model, Cmd.none ) 
-    ReceiveEditProjectResponse (Ok response) ->
-      let
-        editProjectModel = model.editProjectModel
-        userModel = model.userModel
-        newProjectModel = 
-          { editProjectModel | updateForm = Just response.project }
-        newUserModel =
-          { userModel | users = response.allUsers}
-      in
-        ( { model
-          | editProjectModel = newProjectModel
-          , userModel = newUserModel
-          }
-        , Cmd.none 
-        )
-    ReceiveUsersResponse (Err err) ->
-      ( model, Cmd.none ) 
-    ReceiveUsersResponse (Ok response) ->
-      let
-        userModel = model.userModel
-        newUserModel =
-          { userModel | users = response.allUsers}
-      in
-        ( { model
-          | userModel = newUserModel
-          }
-        , Cmd.none 
+        ( newModel
+        , Cmd.map UserMsg userCmd
         )
     ToggleMenu ->
       ( { model
@@ -243,119 +166,30 @@ update msg model =
       )
     Logout ->
       ( model, Nav.load "/accounts/logout/" )
-    ReceiveDate today ->
-      let
-        timelogModel = model.timelogModel
-        newTimelogModel = 
-          { timelogModel
-          | filterDate = today 
-          }
-      in
-        ( { model | today = today, timelogModel = newTimelogModel }, 
-          if model.projectModel.readyProjects then
-            sendTimeLogsQuery model.csrf today model.timelogModel.filterView ReceiveTimelogsResponse
-          else
-            sendTimeLogsWithProjectsQuery model.csrf today model.timelogModel.filterView ReceiveTimelogsWithProjectsResponse
-          )
-
-
-stepTimelog : Model -> ( Model, Cmd Timelogs.Msg ) -> ( Model, Cmd Msg )
-stepTimelog model (timelogModel, cmds) =
-  ( timelogModel
-  , Cmd.map TimelogMsg cmds
-  )
-
-stepAddTimelog : Model -> ( Model, Cmd AddTimelog.Msg ) -> ( Model, Cmd Msg )
-stepAddTimelog model (addTimelogModel, cmds) =
-  ( addTimelogModel
-  , Cmd.map AddTimelogMsg cmds
-  )
-
-stepEditTimelog : Model -> ( Model, Cmd EditTimelog.Msg ) -> ( Model, Cmd Msg )
-stepEditTimelog model (editTimelogModel, cmds) =
-  ( editTimelogModel
-  , Cmd.map EditTimelogMsg cmds
-  )
-
-stepProject : Model -> ( Model, Cmd Projects.Msg ) -> ( Model, Cmd Msg )
-stepProject model (projectModel, cmds) =
-  ( projectModel
-  , Cmd.map ProjectMsg cmds
-  )
-
-stepAddProject : Model -> ( Model, Cmd AddProject.Msg ) -> ( Model, Cmd Msg )
-stepAddProject model (addProjectModel, cmds) =
-  ( addProjectModel
-  , Cmd.map AddProjectMsg cmds
-  )
-
-stepEditProject : Model -> ( Model, Cmd EditProject.Msg ) -> ( Model, Cmd Msg )
-stepEditProject model (editProjectModel, cmds) =
-  ( editProjectModel
-  , Cmd.map EditProjectMsg cmds
-  )
-
-stepUser : Model -> ( Model, Cmd Users.Msg ) -> ( Model, Cmd Msg )
-stepUser model (userModel, cmds) =
-  ( userModel
-  , Cmd.map UserMsg cmds
-  )
-
-sendProjectsQuery : String -> Cmd Msg
-sendProjectsQuery csrf =
-  sendQueryRequest csrf projectsQuery
-    |> Task.attempt ReceiveProjectsResponse
-
-sendProjectQuery : String -> Uuid -> Cmd Msg
-sendProjectQuery csrf uuid =
-  sendQueryRequest csrf (projectQuery uuid)
-    |> Task.attempt ReceiveProjectResponse
-
-sendUsersQuery : String -> Cmd Msg
-sendUsersQuery csrf =
-  sendQueryRequest csrf usersQuery
-    |> Task.attempt ReceiveUsersResponse
-
-sendEditProjectQuery : String -> Uuid -> Cmd Msg
-sendEditProjectQuery csrf uuid =
-  sendQueryRequest csrf (editProjectQuery uuid)
-    |> Task.attempt ReceiveEditProjectResponse
-
-initTimelogPage : Cmd Msg
-initTimelogPage = 
-  Date.today |> Task.perform ReceiveDate
 
 handleRoute : Model -> ( Model, Cmd Msg )
-handleRoute ({ timelogModel, projectModel, csrf } as model) =
+handleRoute ({flags, url, key} as model) =
   let
-    route = Route.fromUrl model.url
+    (_, timelogCmd) = Timelogs.init flags url key
+    (_, addTimelogCmd) = AddTimelog.init flags url key
+    (_, editTimelogCmd) = EditTimelog.init flags url key
+    (_, projectCmd) = Projects.init flags url key
+    (_, addProjectCmd) = AddProject.init flags url key
+    (_, editProjectCmd) = EditProject.init flags url key
+    (_, userCmd) = Users.init flags url key
+    route = Route.fromUrl url
   in
-    case route of
-      TimelogsR ->
-        if timelogModel.readyTimes then
-          ( model, Cmd.none )
-        -- else if projectModel.readyProjects then
-        --   ( model, sendTimeLogsQuery csrf )
-        else
-          ( model, initTimelogPage )
-      AddTimelogR ->
-        if projectModel.readyProjects then
-          ( model, Cmd.none )
-        else
-          ( model, sendProjectsQuery csrf )
-      EditTimelogR uuid ->
-        ( model, sendEditTimelogQuery csrf uuid ReceiveEditTimelogResponse)
-      ProjectsR ->
-        if projectModel.readyProjects then
-          ( model, Cmd.none )
-        else
-          ( model, sendProjectsQuery csrf )
-      AddProjectR ->
-        ( model, sendUsersQuery csrf )
-      EditProjectR uuid ->
-        ( model, sendEditProjectQuery csrf uuid )
-      _ ->
-        ( model, Cmd.none )
+    ( model
+    , Cmd.batch 
+      [ Cmd.map TimelogMsg timelogCmd
+      , Cmd.map AddTimelogMsg addTimelogCmd
+      , Cmd.map EditTimelogMsg editTimelogCmd
+      , Cmd.map ProjectMsg projectCmd
+      , Cmd.map AddProjectMsg addProjectCmd
+      , Cmd.map EditProjectMsg editProjectCmd
+      , Cmd.map UserMsg userCmd
+      ]
+    )
 
 -- SUBSCRIPTIONS
 
@@ -375,8 +209,8 @@ title route =
           "Times"
         ProjectsR ->
           "Projects"
-        AboutR ->
-          "About me"
+        UsersR ->
+          "Users"
         _ ->
           "Home"
   in

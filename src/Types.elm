@@ -11,7 +11,7 @@ import Date exposing (Date)
 type alias Model =
   { key : Nav.Key
   , url : Url.Url
-  , csrf : String
+  , flags : Flags
   , timelogModel : TimelogModel
   , addTimelogModel : AddTimelogModel
   , editTimelogModel : EditTimelogModel

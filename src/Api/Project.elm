@@ -67,6 +67,7 @@ projectsObject =
     |> with (field "company" [] string)
     |> with (field "abbreviation" [] string)
 
+
 projectsQuery : Request Query ProjectsRequest
 projectsQuery =
   let
