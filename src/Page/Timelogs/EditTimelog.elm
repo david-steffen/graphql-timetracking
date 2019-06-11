@@ -3,7 +3,8 @@ module Page.Timelogs.EditTimelog exposing (..)
 import Html exposing (..)
 import Html.Attributes as Attributes exposing (..)
 import Html.Events as Events exposing (..)
-import Types exposing (Model)
+import Types exposing (Model, Flags)
+import Url
 import Types.Timelog exposing 
   ( Timelog
   , TimelogModel
@@ -35,17 +36,28 @@ import Page exposing (InputLength(..), formInput, formSelect, formTextArea, moda
 import Date exposing (Date)
 import Array exposing (..)
 import Browser.Navigation as Nav
+import Route exposing (..)
 
-init : EditTimelogModel
-init =
-  { errResult = Nothing
-  , updateForm = Nothing
-  , isPending = False
-  , showModal = False
-  }
+init : Flags -> Url.Url -> Nav.Key -> ( EditTimelogModel, Cmd Msg )
+init flags url key =
+  let 
+    route = Route.fromUrl url
+  in
+  ( { errResult = Nothing
+    , updateForm = Nothing
+    , isPending = False
+    , showModal = False
+    }
+  , case route of
+      EditTimelogR uuid ->
+        sendEditTimelogQuery flags.csrftoken uuid
+      _ ->
+        Cmd.none
+  )
 
 type Msg  
   = SubmitEditTimelog
+  | ReceiveEditTimelogResponse (Result GraphQLClient.Error EditTimelogRequest)
   | ReceiveUpdateTimelogMutationResponse (Result GraphQLClient.Error TimelogMutationResult)
   | InputUpdateTimelogDescription String
   | InputUpdateTimelogDate String
@@ -60,6 +72,30 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ({editTimelogModel, timelogModel, projectModel} as model) =
   case msg of
+    ReceiveEditTimelogResponse (Err err) ->
+      ( model, Cmd.none ) 
+    ReceiveEditTimelogResponse (Ok response) ->
+      let
+        form = 
+          UpdateTimelogForm 
+            response.timelog.id 
+            response.timelog.description 
+            response.timelog.duration
+            response.timelog.date
+            response.timelog.project.id
+        newTimelogModel = 
+          { editTimelogModel 
+          | updateForm = Just form 
+          }
+        newProjectModel =
+          { projectModel | projects = Array.fromList response.allProjects}
+      in
+        ( { model
+          | editTimelogModel = newTimelogModel
+          , projectModel = newProjectModel
+          }
+        , Cmd.none 
+        )
     ReceiveUpdateTimelogMutationResponse (Err err) ->
       let
         newModel = 
@@ -275,16 +311,16 @@ passToModel timelogModel model =
   { model | editTimelogModel = timelogModel }
 
 
-sendEditTimelogQuery : String -> Uuid -> (Result GraphQLClient.Error EditTimelogRequest -> msg) -> Cmd msg
-sendEditTimelogQuery csrf uuid msg =
+sendEditTimelogQuery : String -> Uuid -> Cmd Msg
+sendEditTimelogQuery csrf uuid =
   sendQueryRequest csrf (editTimelogQuery uuid)
-    |> Task.attempt msg
+    |> Task.attempt ReceiveEditTimelogResponse
 
 sendUpdateTimelogMutation : Model -> Cmd Msg
 sendUpdateTimelogMutation  ({editTimelogModel} as model) =
   case editTimelogModel.updateForm of 
     Just updateForm ->
-      sendMutationRequest model.csrf (updateTimelogMutation <| processUpdateTimelogInput updateForm)
+      sendMutationRequest model.flags.csrftoken (updateTimelogMutation <| processUpdateTimelogInput updateForm)
         |> Task.attempt ReceiveUpdateTimelogMutationResponse
     Nothing ->
       Cmd.none
@@ -293,7 +329,7 @@ sendDeleteTimelogMutation : Model -> Cmd Msg
 sendDeleteTimelogMutation ({editTimelogModel} as model) =
   case editTimelogModel.updateForm of 
     Just form ->
-      sendMutationRequest model.csrf (deleteTimelogMutation <| processDeleteTimelogInput form.id)
+      sendMutationRequest model.flags.csrftoken (deleteTimelogMutation <| processDeleteTimelogInput form.id)
         |> Task.attempt ReceiveDeleteTimelogMutationResponse
     Nothing ->
       Cmd.none

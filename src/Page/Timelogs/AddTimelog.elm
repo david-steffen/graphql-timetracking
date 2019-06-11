@@ -4,7 +4,8 @@ import Html exposing (..)
 import Html.Attributes as Attributes exposing (..)
 import Html.Events as Events exposing (..)
 import Browser.Navigation as Nav
-import Types exposing (Model)
+import Types exposing (Model, Flags)
+import Url
 import Types.Timelog exposing 
   ( Timelog
   , TimelogModel
@@ -29,12 +30,14 @@ import Array exposing (Array)
 import Task exposing (Task)
 
 
-init : AddTimelogModel
-init =
-  { errResult = Nothing
-  , createForm = Nothing
-  , isPending = False
-  }
+init : Flags -> Url.Url -> Nav.Key -> ( AddTimelogModel, Cmd Msg )
+init flags url key =
+  ( { errResult = Nothing
+    , createForm = Nothing
+    , isPending = False
+    }
+  , Cmd.none
+  )
 
 
 type Msg
@@ -189,7 +192,7 @@ sendCreateTimelogMutation : Model -> Cmd Msg
 sendCreateTimelogMutation  ({addTimelogModel} as model) =
   case addTimelogModel.createForm of 
     Just createForm ->
-      sendMutationRequest model.csrf (createTimelogMutation <| processCreateTimelogInput createForm)
+      sendMutationRequest model.flags.csrftoken (createTimelogMutation <| processCreateTimelogInput createForm)
         |> Task.attempt ReceiveCreateTimelogMutationResponse
     Nothing ->
       Cmd.none

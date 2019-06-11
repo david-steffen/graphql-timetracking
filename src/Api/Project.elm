@@ -14,6 +14,7 @@ import Types.Project exposing
   , DeleteProjectMutation
   , ProjectMember
   , ProjectWithMembers
+  , AddProjectRequest
   , EditProjectRequest
   )
 import Types.User exposing ( User )
@@ -31,6 +32,7 @@ import GraphQL.Request.Builder exposing
   , with
   , field
   , string
+  , int
   , extract
   , queryDocument
   , list
@@ -56,6 +58,7 @@ projectWithMembersObject =
     |> with (field "colour" [] string)
     |> with (field "company" [] string)
     |> with (field "abbreviation" [] string)
+    |> with (field "workDayHours" [] int)
     |> with (field "members" [] (list userObject))
 
 projectsObject : ValueSpec NonNull  ObjectType (Project) vars
@@ -66,6 +69,8 @@ projectsObject =
     |> with (field "colour" [] string)
     |> with (field "company" [] string)
     |> with (field "abbreviation" [] string)
+    |> with (field "workDayHours" [] int)
+
 
 projectsQuery : Request Query ProjectsRequest
 projectsQuery =
@@ -90,6 +95,15 @@ projectQuery uuid =
   in
     queryDocument queryRoot |> request { projectId = uuid }
 
+addProjectQuery : Request Query AddProjectRequest
+addProjectQuery =
+  let
+    queryRoot =
+      object AddProjectRequest
+        |> with (field "allUsers" [] (list userObject))
+
+  in
+    queryDocument queryRoot |> request ()
 
 editProjectQuery : Uuid -> Request Query EditProjectRequest
 editProjectQuery uuid =
@@ -112,7 +126,13 @@ convertToCreateProjectMutation project addMembers =
   let
     addMembersStrings = List.map (\x -> Uuid.toString x.id) addMembers
   in
-    CreateProjectMutation project.name project.colour project.company project.abbreviation addMembersStrings
+    CreateProjectMutation
+      project.name
+      project.colour
+      project.company
+      project.abbreviation
+      project.workDayHours
+      addMembersStrings
 
 
 processCreateProjectInput : CreateProjectForm -> List User -> CreateProjectInput
@@ -135,10 +155,11 @@ convertToUpdateProjectMutation project addMembers removeMembers=
   in
     UpdateProjectMutation 
       (Uuid.toString project.id) 
-      project.name 
-      project.colour 
-      project.company 
+      project.name
+      project.colour
+      project.company
       project.abbreviation
+      project.workDayHours
       addMembersStrings
       removeMembersStrings
 
@@ -177,7 +198,8 @@ createProjectMutation project =
             , Var.field "colour" .colour Var.string
             , Var.field "company" .company Var.string
             , Var.field "abbreviation" .abbreviation Var.string
-            , Var.field "add_members" .addMembers (Var.list Var.string)
+            , Var.field "workDayHours" .workDayHours Var.int
+            , Var.field "addMembers" .addMembers (Var.list Var.string)
             ]
         )
 
@@ -204,8 +226,9 @@ updateProjectMutation project =
             , Var.field "colour" .colour Var.string
             , Var.field "company" .company Var.string
             , Var.field "abbreviation" .abbreviation Var.string
-            , Var.field "add_members" .addMembers (Var.list Var.string)
-            , Var.field "remove_members" .removeMembers (Var.list Var.string)
+            , Var.field "workDayHours" .workDayHours Var.int
+            , Var.field "addMembers" .addMembers (Var.list Var.string)
+            , Var.field "removeMembers" .removeMembers (Var.list Var.string)
             ]
         )
 

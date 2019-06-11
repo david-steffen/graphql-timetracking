@@ -6,20 +6,29 @@ import Svg exposing (..)
 import Svg.Attributes as SvgAttr exposing (..)
 import Svg.Events as SvgEvents exposing (..)
 import Array
+import Utils.TimeDelta as TimeDelta exposing (TimeDelta, twoDigitTime)
 
 type alias Model =
   { selected : Maybe Int
   , points : List Point
+  , innerRadius : Float
+  , outerRadius : Float
+  , displayTotal : TimeDelta
   }
 
 init = 
   { selected = Nothing
   , points = []
+  , innerRadius = 95
+  , outerRadius = 70
+  , displayTotal = TimeDelta 0 0 0 0
   }
 
 type alias Point =
-  { time : Float
+  { value : Float
   , color : String
+  , key : String
+  , display : TimeDelta
   }
 
 type alias Segment =
@@ -90,22 +99,22 @@ getPoint angle radius =
   in
     (toFixed 2 x) ++ "," ++ (toFixed 2 y)
 
-segmentsComputed : List Point -> List Segment
-segmentsComputed points = 
+segmentsComputed : Float -> List Point -> List Segment
+segmentsComputed total points = 
   let
-    times = List.map (\point -> point.time) points |> List.sort
-    total = List.sum times
     createSegments start segments points_ =
       let
         point = case List.head points_ of
             Just val ->
               val
             Nothing ->
-              { time = 0
+              { value = 0
               , color = "#333"
+              , key = "unknown"
+              , display = TimeDelta 0 0 0 0
               }
                 
-        size = point.time / total
+        size = point.value / total
         end = start + size
       in
         if List.length points_ == 0 then
@@ -121,23 +130,21 @@ segmentsComputed points =
   in
     createSegments 0 [] points
 
-plotVectors : Segment -> String
-plotVectors segment =
+plotVectors : Float -> Float -> Segment -> String
+plotVectors innerRadius outerRadius segment =
   let
-    innerRadius = 70
-    outerRadius = 85
-    c = pi * 2
+    c = pi * 2 
     start = segment.start * c
     end = segment.end * c
     outerEdgeList angle limit list = 
       let
-          newAngle = angle + 0.05
-          newList = (getPoint newAngle outerRadius) :: list
+        newAngle = angle + 0.05
+        newList = (getPoint newAngle outerRadius) :: list
       in
         if newAngle < limit then
           outerEdgeList newAngle limit newList
         else
-          List.reverse newList
+          List.reverse list
       
     innerEdgeList angle limit list =
       let
@@ -147,28 +154,30 @@ plotVectors segment =
         if newAngle > limit then
           innerEdgeList newAngle limit newList
         else
-          List.reverse newList      
+          List.reverse list      
   in
-    ( outerEdgeList start end [] ) 
-    ++ [ getPoint end outerRadius ] 
+    [ getPoint start outerRadius ] 
+    ++ ( outerEdgeList start end [] ) 
+    ++ [ getPoint end outerRadius ]
+    ++ [ getPoint end innerRadius ] 
     ++ ( innerEdgeList end start [] )
     ++ [ getPoint start innerRadius ] 
     |> String.join " " 
 
 view model =
   let
-    curriedPolygon = polygonView model.selected
+    curriedPolygon = polygonView model.selected model.innerRadius model.outerRadius
+    times = List.map (\point -> point.value) model.points |> List.sort
+    totalTime = List.sum times
     selectedTime index points =
       let
         point = Array.get index (Array.fromList points)
-      in 
-        toFixed 2 (
-          case point of 
-            Just val ->
-              val.time
-            Nothing ->
-              0
-        )
+      in
+        case point of 
+          Just val ->
+            val.display
+          Nothing ->
+            TimeDelta 0 0 0 0
   in
     Html.div
       []
@@ -183,33 +192,72 @@ view model =
             ]
             [ Svg.g 
               [ SvgAttr.transform "translate(100,100)" ]
-              (List.indexedMap curriedPolygon (segmentsComputed model.points))
-              , case model.selected of
-                Just val ->
-                  Svg.text_
-                    [ SvgAttr.y "100"
-                    , SvgAttr.x "100" 
-                    ]
-                    [ Html.text <| selectedTime val model.points ]
-                  
-                Nothing ->
-                  div [] []
+              (if List.length model.points > 0 then
+                (List.indexedMap curriedPolygon (segmentsComputed totalTime model.points))
+              else
+                [ Svg.polygon
+                  [ SvgAttr.class "donut-segment"
+                  , SvgAttr.fill "#333"
+                  , SvgAttr.opacity "0.2"
+                  , SvgAttr.points <| plotVectors model.innerRadius model.outerRadius (Segment 0 1 "#333")                     
+                  ]
+                  []
+                ]
+              )
+              , Svg.g
+                []
+                ( case model.selected of
+                    Just val ->
+                      formatDisplay <| selectedTime val model.points 
+                    Nothing ->
+                      formatDisplay model.displayTotal
+                )
             ]
           ]
         ]
       ]
 
-polygonView : Maybe Int -> Int -> Segment -> ( Svg Msg )
-polygonView selected index segment  =
+formatDisplay : TimeDelta -> List (Svg msg)
+formatDisplay timeDelta =
   let
-    newSelected = 
-      case selected of
-        Just val ->
-          val
-        Nothing ->
-          -1
-    opacity = 
-      if newSelected == index then
+      dayString = 
+        case timeDelta.days of
+          1 -> "day"
+          _ -> "days"
+  in
+  
+  [ Svg.text_
+    [ SvgAttr.x "50%"
+    , SvgAttr.y "40%"
+    , SvgAttr.class "large" 
+    ]
+    [ Svg.text <| String.fromInt timeDelta.days 
+    , Svg.tspan
+        []
+        [ Svg.text dayString ]
+    ]
+  , Svg.text_
+    [ SvgAttr.x "50%"
+    , SvgAttr.y "60%"
+    , SvgAttr.class "small" 
+    ]
+    [ Svg.text 
+      <| String.join ":"
+        [ twoDigitTime (timeDelta.hours)
+        , twoDigitTime (timeDelta.minutes)
+        , twoDigitTime (timeDelta.seconds)
+        ]
+    ]
+  ]
+
+polygonView : Maybe Int -> Float -> Float -> Int -> Segment -> ( Svg Msg )
+polygonView selected innerRadius outerRadius index segment  =
+  let
+    newSelected = Maybe.withDefault -1 selected
+    opacity =
+      if newSelected == -1 then
+        1
+      else if newSelected == index then
         1
       else
         0.2
@@ -220,6 +268,6 @@ polygonView selected index segment  =
       , SvgAttr.class "donut-segment"
       , SvgAttr.fill segment.color
       , SvgAttr.opacity <| String.fromFloat opacity
-      , SvgAttr.points <| plotVectors segment                        
+      , SvgAttr.points <| plotVectors innerRadius outerRadius segment                        
       ]
       []

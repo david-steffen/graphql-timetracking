@@ -43,7 +43,7 @@ class Query(object):
     def resolve_all_projects(self, info, **kwargs):
         if not info.context.user.is_authenticated:
             return None
-        elif info.context.user.has_perm('projects.add_project') and info.context.user.account.type is not Account.FREE:
+        elif info.context.user.has_perm('projects.add_project') and info.context.user.account.acc_type is not Account.FREE:
             return Project.objects.filter(account=info.context.user.account)
         else:
             return Project.objects.filter(members=info.context.user.account)
@@ -63,7 +63,8 @@ class ProjectInput(graphene.InputObjectType):
     name = graphene.String(required=True)
     company = graphene.String()
     status = graphene.Boolean()
-    add_members = graphene.List(graphene.UUID, name='add_members')
+    work_day_hours = graphene.Int(name='workDayHours')            
+    add_members = graphene.List(graphene.UUID, name='addMembers')
 
 
 class CreateProject(graphene.Mutation):
@@ -81,6 +82,7 @@ class CreateProject(graphene.Mutation):
             name = input.get('name', ''),
             company = input.get('company', ''),
             status = input.get('status', False),
+            work_day_hours = input.get('work_day_hours', 0),
             account = info.context.user.account
         )
         project.save()
@@ -98,7 +100,7 @@ class CreateProject(graphene.Mutation):
 
 class UpdateProjectInput(ProjectInput):
     id = graphene.UUID(required=True)
-    remove_members = graphene.List(graphene.UUID, name='remove_members')
+    remove_members = graphene.List(graphene.UUID, name='removeMembers')
 
 
 class UpdateProject(graphene.Mutation):
@@ -118,15 +120,15 @@ class UpdateProject(graphene.Mutation):
             project.name = input.get('name', '')
             project.company = input.get('company', '')
             project.status = input.get('status', False)
+            project.work_day_hours = input.get('work_day_hours', 0)
             project.save()
-            remove_members = input.get('remove_members')
-            add_members = input.get('add_members')
+            remove_members = input.get('remove_members', [])
+            add_members = input.get('add_members', [])
             if len(remove_members):
                 ProjectMember.objects.filter(project=project, user_id__in=remove_members).delete()
             if len(add_members):
                 members = map(
-                    lambda x: 
-                        ProjectMember(user_id=x, project=project)
+                    lambda x: ProjectMember(user_id=x, project=project)
                     , add_members)
                 ProjectMember.objects.bulk_create(members)
 

@@ -3,20 +3,6 @@ import graphene
 from graphene_django.types import DjangoObjectType, ObjectType
 
 
-class UserNode(ObjectType):
-    id = graphene.String()
-    email = graphene.String()
-    first_name = graphene.String(name='first_name')
-    last_name = graphene.String(name='last_name')
-
-    @classmethod
-    def get_node(cls, id, context, info):
-        try:
-            return cls._meta.model.objects.filter(account=context.user.account)
-        except cls._meta.model.DoesNotExist:
-            return None
-
-
 class AccountNode(DjangoObjectType):
     class Meta:
         model = Account
@@ -31,12 +17,26 @@ class AccountNode(DjangoObjectType):
             except cls._meta.model.DoesNotExist:
                 return None
 
-        
+
+class UserNode(ObjectType):
+    id = graphene.String()
+    email = graphene.String()
+    first_name = graphene.String()
+    last_name = graphene.String()
+    account = graphene.Field(AccountNode, id=graphene.UUID())
+
+    @classmethod
+    def get_node(cls, id, context, info):
+        try:
+            return cls._meta.model.objects.filter(account=context.user.account)
+        except cls._meta.model.DoesNotExist:
+            return None
 
 
 class Query(object):
     user = graphene.Field(UserNode, id=graphene.UUID())
     all_users = graphene.List(UserNode)
+    profile = graphene.Field(UserNode)
 
     account = graphene.Field(AccountNode, id=graphene.UUID(), name=graphene.String())
     all_accounts = graphene.List(AccountNode)
@@ -54,6 +54,9 @@ class Query(object):
             return User.objects.get(pk=id)
 
         return None
+
+    def resolve_profile(self, info, **kwargs):
+        return info.context.user
 
     def resolve_all_accounts(self, info, **kwargs):
         if info.context.user.is_staff:

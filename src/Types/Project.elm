@@ -33,6 +33,7 @@ type alias Project =
   , colour : String
   , company : String
   , abbreviation : String
+  , workDayHours : Int
   }
 
 type alias ProjectWithMembers =
@@ -41,12 +42,17 @@ type alias ProjectWithMembers =
   , colour : String
   , company : String
   , abbreviation : String
+  , workDayHours : Int
   , members : List User
   }
 
 type alias ProjectMember =
   { id : Uuid 
   , user : User
+  }
+
+type alias AddProjectRequest =
+  { allUsers : List User
   }
 
 type alias EditProjectRequest =
@@ -63,6 +69,7 @@ type alias CreateProjectMutation =
   , colour : String
   , company : String
   , abbreviation : String
+  , workDayHours : Int
   , addMembers : List String
   }
 
@@ -74,6 +81,7 @@ type alias CreateProjectForm =
   , colour : String
   , company : String
   , abbreviation : String
+  , workDayHours : Int
   }
 
 type alias UpdateProjectMutation =
@@ -82,6 +90,7 @@ type alias UpdateProjectMutation =
   , colour : String
   , company : String
   , abbreviation : String
+  , workDayHours : Int
   , addMembers : List String
   , removeMembers : List String
   }

@@ -76,12 +76,13 @@ class Account(BaseModel):
         (CORPORATE, 'Corporate'),
     )
     name = models.CharField(max_length=50, blank=True)
-    type = models.CharField(
+    acc_type = models.CharField(
         max_length=2,
         choices=ACCOUNT_TYPE_CHOICES,
         default=FREE,
     )
     country = CountryField()
+    global_work_day_hours = models.IntegerField(default=8)
 
     def __str__(self):
         return self.name

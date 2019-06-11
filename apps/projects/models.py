@@ -20,6 +20,7 @@ class Project(BaseModel):
     company = models.CharField(max_length=50, blank=True)
     account = models.ForeignKey("accounts.Account", on_delete=models.DO_NOTHING)
     status = models.BooleanField(default=False)
+    work_day_hours = models.IntegerField(default=0)
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, through=ProjectMember)
 
     class Meta:

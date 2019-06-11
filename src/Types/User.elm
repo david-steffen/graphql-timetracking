@@ -9,14 +9,33 @@ type alias UserModel =
   , isPending : Bool
   }
 
+type alias ProfileModel =
+  { errResult : Maybe String
+  , readyUser : Bool
+  , user : Maybe User
+  , isPending : Bool
+  }
+
 type alias User =
   { id : Uuid
   , email : String
-  , first_name : String
-  , last_name : String
+  , firstName : String
+  , lastName : String
+  , account : Account
+  }
+
+type alias Account =
+  { id : Uuid
+  , name : String
+  , accType : String
+  , globalWorkDayHours : Int
   }
 
 type alias UsersRequest =
   { allUsers : List User
+  }
+
+type alias ProfileRequest =
+  { profile : User
   }
 

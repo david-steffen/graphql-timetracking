@@ -7,6 +7,8 @@ module Utils.TimeDelta exposing
   , add
   , customDaysAdd
   , toFloat
+  , toCustomDayFloat
+  , twoDigitTime
   )
 
 import String exposing (split, toInt, fromInt)
@@ -89,6 +91,7 @@ totalTime timeDelta =
         , twoDigitTime (timeDelta.minutes)
         ]
 
+getTotalHours : TimeDelta -> Int
 getTotalHours timeDelta =
     timeDelta.hours + (timeDelta.days * 24)
 
@@ -124,14 +127,26 @@ toString timeDelta =
     in
         days++time
 
-toFloat : TimeDelta -> Float
-toFloat timeDelta =
+format : String -> TimeDelta -> String
+format pattern timeDelta =
+  ""
+
+toSeconds : TimeDelta -> Float
+toSeconds timeDelta = 
   let
     minuteSeconds = timeDelta.minutes * 60
     hourSeconds = timeDelta.hours * 3600
     daySeconds = timeDelta.days * 86400
   in
-    Basics.toFloat (timeDelta.seconds + minuteSeconds + hourSeconds + daySeconds) / 86400
+    Basics.toFloat <| timeDelta.seconds + minuteSeconds + hourSeconds + daySeconds
+
+toFloat : TimeDelta -> Float
+toFloat timeDelta =
+  (toSeconds timeDelta) / 86400
+
+toCustomDayFloat : Int -> TimeDelta -> Float
+toCustomDayFloat hoursInDay timeDelta =
+  (toSeconds timeDelta) / (3600 * Basics.toFloat hoursInDay)
 
 add : TimeDelta -> TimeDelta -> TimeDelta
 add time1 time2 =

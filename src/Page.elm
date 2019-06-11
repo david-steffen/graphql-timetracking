@@ -151,7 +151,7 @@ formInput type_ placeholder msg value inputLength =
 
 fullNameString : User -> String
 fullNameString user =
-  user.first_name ++ " " ++ user.last_name
+  user.firstName ++ " " ++ user.lastName
 
 membersSelect : List User -> List User -> (User -> msg) -> (User -> msg) -> Html msg
 membersSelect members availableUsers removeMembersMsg addMembersMsg  = 

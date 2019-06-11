@@ -5,13 +5,15 @@ import Html.Attributes as Attributes exposing (..)
 import Html.Events as Events exposing (..)
 import Uuid exposing (Uuid)
 import GraphQL.Client.Http as GraphQLClient
-import Types exposing (Model)
+import Types exposing (Model, Flags)
+import Url
 import Types.Project exposing 
   ( Project
   , ProjectModel
   , CreateProjectForm
   , ProjectDeleteMutationResult
   , AddProjectModel
+  , AddProjectRequest
   )
 import Types.User exposing (User)
 import Task
@@ -21,22 +23,33 @@ import Page exposing
   , formSelect
   , membersSelect
   )
-import Api exposing (sendMutationRequest)
+import Api exposing (sendQueryRequest, sendMutationRequest)
 import Api.Project exposing 
   ( createProjectMutation
   , processCreateProjectInput
+  , addProjectQuery
   )
 import Array exposing (Array)
 import Browser.Navigation as Nav
+import Route exposing (..)
 
 
-init : AddProjectModel
-init =
-  { errResult = Nothing
-  , createForm = Nothing
-  , isPending = False
-  , addMembers = []
-  }
+init : Flags -> Url.Url -> Nav.Key -> ( AddProjectModel, Cmd Msg )
+init flags url key =
+  let 
+    route = Route.fromUrl url
+  in
+  ( { errResult = Nothing
+    , createForm = Nothing
+    , isPending = False
+    , addMembers = []
+    }
+  , case route of
+      AddProjectR ->
+        sendAddProjectQuery flags.csrftoken
+      _ ->
+        Cmd.none
+  )
 
 type Msg  
   = SubmitCreateProject
@@ -45,14 +58,28 @@ type Msg
   | InputCreateProjectAbbreviation String
   | InputCreateProjectColour String
   | InputCreateProjectCompany String
+  | InputCreateProjectWorkDay String
   | CancelAdd
   | AddMembers User
   | RemoveMembers User
+  | ReceiveAddProjectResponse (Result GraphQLClient.Error AddProjectRequest)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg ({ addProjectModel, projectModel } as model) =
+update msg ({ addProjectModel, projectModel, userModel } as model) =
   case msg of
+    ReceiveAddProjectResponse (Err err) ->
+      (model, Cmd.none)
+    ReceiveAddProjectResponse (Ok response) ->
+      let
+        newUserModel =
+          { userModel | users = response.allUsers}
+      in
+        ( { model
+          | userModel = newUserModel
+          }
+        , Cmd.none 
+        )
     SubmitCreateProject ->
       let
         newProjectModel = 
@@ -157,6 +184,21 @@ update msg ({ addProjectModel, projectModel } as model) =
           model
         , Cmd.none
         )
+    InputCreateProjectWorkDay string ->
+      let
+        project = hasProjectForm addProjectModel.createForm
+        newProject =
+          { project
+          | workDayHours = Maybe.withDefault 0 <| String.toInt string
+          }
+      in
+        ( passToModel 
+          { addProjectModel 
+          | createForm = Just newProject
+          }
+          model
+        , Cmd.none
+        )
     CancelAdd ->
       let
         newAddProjectModel = 
@@ -197,17 +239,22 @@ hasProjectForm project =
     Just value ->
       value
     Nothing ->
-      CreateProjectForm "" "" "" ""
+      CreateProjectForm "" "" "" "" 0
 
 passToModel : AddProjectModel -> Model -> Model
 passToModel addProjectModel model =
   { model | addProjectModel = addProjectModel }
 
+sendAddProjectQuery : String-> Cmd Msg
+sendAddProjectQuery csrf =
+  sendQueryRequest csrf addProjectQuery
+    |> Task.attempt ReceiveAddProjectResponse
+
 sendCreateProjectMutation : Model -> Cmd Msg
 sendCreateProjectMutation  ({addProjectModel} as model) =
   case addProjectModel.createForm of 
     Just createForm ->
-      sendMutationRequest model.csrf (createProjectMutation <| processCreateProjectInput createForm addProjectModel.addMembers)
+      sendMutationRequest model.flags.csrftoken (createProjectMutation <| processCreateProjectInput createForm addProjectModel.addMembers)
         |> Task.attempt ReceiveCreateProjectMutationResponse
     Nothing ->
       Cmd.none
@@ -260,6 +307,7 @@ createProjectForm ({addProjectModel, userModel} as model) =
       , formInput "text" "Name" InputCreateProjectName Nothing Full
       , formInput "text" "Company" InputCreateProjectCompany Nothing Full
       , formInput "text" "Abbreviation" InputCreateProjectAbbreviation Nothing Full
+      , formInput "text" "Hours in work day" InputCreateProjectWorkDay Nothing Short
       , formInput "color" "Colour" InputCreateProjectColour Nothing Short
       , membersSelect members availableUsers RemoveMembers AddMembers
       , Html.div [ Attributes.class "field" ]
