@@ -1,0 +1,110 @@
+@import './bulma';
+
+$green: #136e58;
+$grey: #ebebeb;
+
+$break-small: 720px;
+$break-large: 1200px;
+
+
+.header {
+  border-bottom: 5px solid $green;
+}
+.navbar .icon {
+  color: #333;
+}
+.row-group {
+  display: flex;
+  align-items: stretch;
+  flex-flow: row wrap;
+}
+
+.project-color {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+}
+.groups {
+  border-bottom: 1px solid $grey;
+}
+.date-column {
+  background-color: #363636;
+  align-items: center;
+  min-width: 135px;
+}
+.date-text {
+  color: $grey;
+  display: flex;
+  justify-content: center;
+}
+.custom-columns {
+  width: 100%;
+  padding: 20px 0px;
+  border-bottom: 1px solid $grey;
+  .custom-column {
+    &.column-1 {
+      width: 150px;
+      .project-color {
+        display: inline-block;
+        margin-right: 10px;
+        margin-top: 7px;
+      }
+      .project-details {
+        vertical-align: top;
+        display: inline-block;
+      }
+    }
+    &.column-2 {
+      width: 100%;
+      padding-left: 26px;
+    }
+    &.column-3 {
+      width: 40px;
+      text-align: center;
+    }
+    @media screen and (min-width: $break-small) {
+      display: inline-block;
+      vertical-align: top;
+      &.column-2 {
+        width: calc(100% - 190px);
+        padding-left: 20px;
+      }
+    }
+  }
+}
+
+.donut-chart {
+  svg {
+    width: 100%;
+    height: 100%;
+    polygon {
+      stroke: #fff;
+      stroke-width: 2;
+      cursor: pointer;
+    }
+    text {
+      width: 100%;
+      display: block;
+      text-anchor: middle;
+      dominant-baseline: middle;
+      &.large {
+        font-size: 55px;
+        tspan {
+          font-size: 20px;
+        }
+      }
+      &.small {
+        font-size: 25px;
+      }
+    }
+  }
+  .square {
+    width: 100px;
+    height: 100px;
+  }
+}
+@media screen and (min-width: $break-small) {
+  .filter-projects {
+    max-width: 250px;
+  }
+}
