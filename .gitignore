@@ -89,3 +89,4 @@ elm-stuff/
 *.iml
 .idea
 .vscode
+*.code-workspace
