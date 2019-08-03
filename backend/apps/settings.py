@@ -60,7 +60,7 @@ ROOT_URLCONF = 'apps.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [ 'client/templates' ],
+        'DIRS': ['client/templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -134,9 +134,19 @@ STATICFILES_DIRS = (
 )
 
 GRAPHENE = {
-    'SCHEMA': 'apps.schema.schema' # Where your Graphene schema lives
+    'SCHEMA': 'apps.schema.schema'  # Where your Graphene schema lives
 }
 
 AUTH_USER_MODEL = 'accounts.User'
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+
+EMAIL_HOST = 'smtp.sendgrid.net'
+
+EMAIL_HOST_USER = os.getenv('SENDGRID_API_USER')
+
+EMAIL_HOST_PASSWORD = os.getenv('SENDGRID_API_KEY')
+
+EMAIL_PORT = 587
+
+EMAIL_USE_TLS = True
