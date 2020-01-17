@@ -257,10 +257,30 @@ update msg ({timelogModel, projectModel} as model) =
       updateDate Days 7 model
     
     PreviousMonth ->
-      updateDate Months (-1) model 
+      let
+        (startDate, endDate) = rangeFromDate (Date.add Months (-1) model.timelogModel.filterStartDate) timelogModel.filterView
+      in
+        ( passToModel 
+          { timelogModel 
+          | filterStartDate = startDate
+          , filterEndDate = endDate
+          }
+          model
+        , sendTimeLogsQuery model.flags.csrftoken startDate endDate timelogModel.filterView
+        )
     
     NextMonth ->
-      updateDate Months 1 model
+      let
+        (startDate, endDate) = rangeFromDate (Date.add Months 1 model.timelogModel.filterStartDate) timelogModel.filterView
+      in
+        ( passToModel 
+          { timelogModel 
+          | filterStartDate = startDate
+          , filterEndDate = endDate
+          }
+          model
+        , sendTimeLogsQuery model.flags.csrftoken startDate endDate timelogModel.filterView
+        )
 
     DonutChartMsg donutChartMsg ->
       DonutChart.update donutChartMsg timelogModel.donutChartData

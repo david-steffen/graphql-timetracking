@@ -3,11 +3,9 @@ from apps.projects.schema import Query as ProjectQuery, CreateProject, UpdatePro
 from apps.tasks.schema import Query as TaskQuery, CreateTask, UpdateTask, DeleteTask
 import graphene
 
-from graphene_django.debug import DjangoDebug
-
 
 class Query(AccountQuery, ProjectQuery, TaskQuery, graphene.ObjectType):
-    debug = graphene.Field(DjangoDebug, name='__debug')
+    pass
 
 
 class Mutation(graphene.ObjectType):
@@ -17,5 +15,6 @@ class Mutation(graphene.ObjectType):
     updateProject = UpdateProject.Field()
     deleteTask = DeleteTask.Field()
     deleteProject = DeleteProject.Field()
+
 
 schema = graphene.Schema(query=Query, mutation=Mutation)

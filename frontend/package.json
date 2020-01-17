@@ -1,0 +1,7 @@
+{
+    "name": "elm-graphql",
+    "version": "1.0.0",
+    "scripts": {
+      "api": "elm-graphql http://localhost:8000/graphql_debug --base ApiTypes"
+    }
+}

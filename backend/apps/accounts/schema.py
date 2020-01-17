@@ -13,7 +13,7 @@ class AccountNode(DjangoObjectType):
             return None
         else:
             try:
-                account = cls._meta.model.objects.filter(user=context.user)
+                return cls._meta.model.objects.filter(user=context.user)
             except cls._meta.model.DoesNotExist:
                 return None
 

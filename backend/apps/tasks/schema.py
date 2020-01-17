@@ -38,17 +38,17 @@ class Query(object):
         else:
             return Task.objects.filter(user=info.context.user)
 
-
     def resolve_timelogs_by_range(self, info, **kwargs):
         start = kwargs.get('start')
         end = kwargs.get('end')
         if not info.context.user.is_authenticated:
             return Task.objects.none()
         else:
-            return (Task.objects.filter(user=info.context.user)
+            return (
+                Task.objects.filter(user=info.context.user)
                 .filter(date__gte=start)
                 .filter(date__lte=end)
-                )
+            )
 
     def resolve_timelog(self, info, **kwargs):
         id = kwargs.get('id')
@@ -63,7 +63,7 @@ class TaskInput(graphene.InputObjectType):
     project = graphene.String(required=True)
     duration = TimeDelta(required=True)
     description = graphene.String(required=True, default_value='')
-    date = graphene.types.datetime.DateTime(required=True)
+    date = graphene.types.datetime.Date(required=True)
     logged = graphene.Boolean(default_value=True)
 
 
