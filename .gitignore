@@ -85,6 +85,9 @@ venv.bak/
 # elm
 elm-stuff/
 
+# npm
+node_modules/
+
 # ide specifics
 *.iml
 .idea

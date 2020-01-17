@@ -16,6 +16,7 @@ type alias Model =
   , displayTotal : TimeDelta
   }
 
+init: Model
 init = 
   { selected = Nothing
   , points = []
@@ -94,10 +95,10 @@ toFixed precision value =
 getPoint : Float -> Float -> String 
 getPoint angle radius =
   let
-    x = radius * (sin angle)
+    x = radius * sin angle
     y = radius * -(cos angle)
   in
-    (toFixed 2 x) ++ "," ++ (toFixed 2 y)
+    toFixed 2 x ++ "," ++ toFixed 2 y
 
 segmentsComputed : Float -> List Point -> List Segment
 segmentsComputed total points = 

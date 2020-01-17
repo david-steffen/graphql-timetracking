@@ -42,6 +42,7 @@ class UserManager(BaseUserManager):
         )
         return user
 
+
 class User(PermissionsMixin, AbstractBaseUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(
